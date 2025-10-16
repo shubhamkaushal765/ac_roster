@@ -1,10 +1,10 @@
 import numpy as np
-import heapq
 from copy import deepcopy
 from collections import defaultdict
-import random
 import time
 import copy
+from bisect import bisect_left
+import plotly.graph_objects as go
 
 NUM_SLOTS = 48
 START_HOUR = 10
@@ -489,57 +489,73 @@ def generate_break_schedules(base_schedules, officer_names):
 
 # all_break_schedules = generate_break_schedules(base_schedules, officer_names)
 
+
 class SegmentTree:
     def __init__(self, work_count):
         self.work_count = work_count.copy()
-    
+
     def update_delta(self, delta_indices, delta):
         for i in delta_indices:
             self.work_count[i] += delta
-    
-    def compute_penalty(self):
-        diffs = np.diff(self.work_count)
-        return int(np.sum(diffs != 0))  # cast to int to avoid numpy.int64 issues
 
-def greedy_smooth_schedule_beam(sos_schedule_matrix, main_officers_schedule, all_break_schedule, beam_width=10):
-    I, L = sos_schedule_matrix.shape
+    def compute_penalty(self):
+        """Penalty = number of changes between consecutive slots."""
+        diffs = np.diff(self.work_count)
+        return int(np.sum(diffs != 0))
+
+    def compute_reward(self):
+        """Reward per slot = max(work_count) - work_count[t]."""
+        max_work_count = np.max(self.work_count)
+        return int(np.sum(max_work_count - self.work_count))
+
+    def compute_score(self, alpha=1.0, beta=1.0):
+        """Combined score = alpha * penalty - beta * reward (lower is better)."""
+        penalty = self.compute_penalty()
+        reward = self.compute_reward()
+        return alpha * penalty - beta * reward
     
-    initial_work_count = sos_schedule_matrix.sum(axis=0) 
+def greedy_smooth_schedule_beam(sos_schedule_matrix, main_officers_schedule, all_break_schedule,
+                                beam_width=50, alpha=0.1, beta=1.0):
+    I, L = sos_schedule_matrix.shape
+
+    # initial work count
+    initial_work_count = sos_schedule_matrix.sum(axis=0)
     if main_officers_schedule is not None:
         main_officers_binary = np.vstack([np.where(v != 0, 1, 0) for v in main_officers_schedule.values()])
         initial_work_count += main_officers_binary.sum(axis=0)
-    
-    # Beam elements: (penalty, SegmentTree, chosen_indices)
-    beam = [(SegmentTree(initial_work_count), np.sum(np.diff(initial_work_count) != 0), [])]
 
+    # Initialize beam: (SegmentTree, score, chosen_indices)
+    stree = SegmentTree(initial_work_count)
+    beam = [(stree, stree.compute_score(alpha, beta), [])]
+
+    # Iterate over each SOS officer
     for officer in range(I):
         officer_key = f'O{officer+1}'
         candidates = all_break_schedule.get(officer_key, [])
         new_beam = []
 
         if not candidates:
-            # No break schedules: extend beam with None
-            for stree, pen, indices in beam:
-                new_beam.append((stree, pen, indices + [None]))
+            # No candidates — carry forward
+            for stree, score, indices in beam:
+                new_beam.append((stree, score, indices + [None]))
             beam = new_beam
             continue
 
-        for stree, pen, indices in beam:
+        for stree, score, indices in beam:
             for idx, candidate in enumerate(candidates):
                 delta_indices = np.where((sos_schedule_matrix[officer] == 1) & (candidate == 0))[0]
                 new_stree = deepcopy(stree)
                 if len(delta_indices) > 0:
                     new_stree.update_delta(delta_indices, -1)
-                new_penalty = new_stree.compute_penalty()
-                new_beam.append((new_stree, new_penalty, indices + [idx]))
+                new_score = new_stree.compute_score(alpha, beta)
+                new_beam.append((new_stree, new_score, indices + [idx]))
 
-        # Keep top-K by penalty
+        # Keep only top-K by total score (lower = better)
         beam = sorted(new_beam, key=lambda x: x[1])[:beam_width]
 
-    # Return best solution
-    best_stree, min_penalty, chosen_indices = min(beam, key=lambda x: x[1])
-    best_work_count = best_stree.work_count
-    return chosen_indices, best_work_count, min_penalty
+    # Return best candidate
+    best_stree, best_score, chosen_indices = min(beam, key=lambda x: x[1])
+    return chosen_indices, best_stree.work_count, best_score
 
 # chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
 #     base_schedules,all_break_schedules,beam_width=20  # tune beam width
@@ -801,7 +817,176 @@ def format_slots_with_sep(row, sep_every=4):
             formatted.append("|")  # add separator
     return ' '.join(formatted)
 
+def slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows,
+                                   total_counters=41, total_slots=48):
+    """
+    Assign officers to counters using gap-aware greedy interval packing.
 
+    Args:
+        schedule_intervals_to_officers: dict {(start,end): [officer_ids]}
+        partial_empty_rows: dict {counter_id: [(avail_start, avail_end), ...]}
+        total_counters: number of counters
+        total_slots: number of time slots
+
+    Returns:
+        counter_matrix: np.array of shape (total_counters, total_slots)
+                        each element is officer_id or '0'
+    """
+    counter_matrix = np.full((total_counters, total_slots), '0', dtype=object)
+    
+    # Track occupied intervals per counter: counter_id -> sorted list of (start,end,officer_id)
+    # ONLY initialize counters we can actually use
+    counter_occupied = {}
+    
+    # CRITICAL FIX: Initialize partial counters with RESERVED blocks for unavailable ranges
+    for counter_id, avail_ranges in partial_empty_rows.items():
+        reserved = []
+        sorted_ranges = sorted(avail_ranges)
+        
+        # Mark everything before first available range as RESERVED
+        if sorted_ranges[0][0] > 0:
+            reserved.append((0, sorted_ranges[0][0] - 1, 'RESERVED'))
+        
+        # Mark gaps between available ranges as RESERVED
+        for i in range(len(sorted_ranges) - 1):
+            gap_start = sorted_ranges[i][1] + 1
+            gap_end = sorted_ranges[i + 1][0] - 1
+            if gap_start <= gap_end:
+                reserved.append((gap_start, gap_end, 'RESERVED'))
+        
+        # Mark everything after last available range as RESERVED
+        if sorted_ranges[-1][1] < total_slots - 1:
+            reserved.append((sorted_ranges[-1][1] + 1, total_slots - 1, 'RESERVED'))
+        
+        counter_occupied[counter_id] = reserved
+    
+    # empty_counters is 1-indexed (counter names), convert to 0-indexed (counter IDs)
+    empty_counters = [8, 37, 36, 26, 16, 6, 35, 25, 15, 5, 34, 24, 14, 4, 33, 23, 13, 3, 32, 22, 12, 2, 31, 21, 11, 1]
+    empty_counters = [c - 1 for c in empty_counters]  # Convert to 0-indexed
+    # Filter out any counters that are already partial
+    empty_counters = [c for c in empty_counters if c not in partial_empty_rows]
+    print(f"Available empty counters (0-indexed) after filtering: {empty_counters}")
+    print(f"Available empty counters (display names): {['C' + str(c+1) for c in empty_counters]}")
+    print(f"Partial counters: {list(partial_empty_rows.keys())}")
+    empty_idx = 0
+    
+    # Sort intervals by start time, then by end time
+    sorted_intervals = sorted(schedule_intervals_to_officers.items(), 
+                             key=lambda x: (x[0][0], x[0][1]))
+    
+    # Helper: check if interval can be placed in occupied list at a position
+    def can_place(occupied, interval):
+        """
+        Check if interval can fit without overlap.
+        Returns (can_fit: bool, insert_idx: int)
+        """
+        start, end = interval
+        
+        # Use only start times for binary search
+        occupied_starts = [s for s, e, _ in occupied]
+        idx = bisect_left(occupied_starts, start)
+        
+        # Check overlap with previous interval
+        if idx > 0:
+            prev_start, prev_end, _ = occupied[idx - 1]
+            # Inclusive intervals: [a,b] and [c,d] overlap if max(a,c) <= min(b,d)
+            if max(prev_start, start) <= min(prev_end, end):
+                return False, idx
+        
+        # Check overlap with next interval
+        if idx < len(occupied):
+            next_start, next_end, _ = occupied[idx]
+            if max(next_start, start) <= min(next_end, end):
+                return False, idx
+        
+        return True, idx
+    
+    for interval, officer_ids in sorted_intervals:
+        start, end = interval
+        
+        for officer_id in officer_ids:
+            best_counter = None
+            best_score = -1
+            best_insert_idx = -1
+            
+            # Step 1: try partial counters first (RESERVED blocks will prevent invalid placement)
+            for counter_id in partial_empty_rows.keys():
+                occupied = counter_occupied[counter_id]
+                can_fit, insert_idx = can_place(occupied, interval)
+                if can_fit:
+                    # Score: bonus for consecutive placement
+                    score = 50  # base bonus for partial counter
+                    if insert_idx > 0 and occupied[insert_idx-1][1] + 1 == start and occupied[insert_idx-1][2] != 'RESERVED':
+                        score += 100  # connects to previous (not RESERVED)
+                    if insert_idx < len(occupied) and end + 1 == occupied[insert_idx][0] and occupied[insert_idx][2] != 'RESERVED':
+                        score += 100  # connects to next (not RESERVED)
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_counter = counter_id
+                        best_insert_idx = insert_idx
+            
+            # Step 2: try already used empty counters (gap allowed)
+            if best_counter is None:
+                for counter_id in list(counter_occupied.keys()):
+                    # Skip partial counters (already tried in step 1)
+                    if counter_id in partial_empty_rows:
+                        continue
+                    
+                    occupied = counter_occupied[counter_id]
+                    can_fit, insert_idx = can_place(occupied, interval)
+                    if can_fit:
+                        score = 10  # base score for reusing counter
+                        # bonus if connects to previous or next
+                        if insert_idx > 0 and occupied[insert_idx-1][1] + 1 == start:
+                            score += 100
+                        if insert_idx < len(occupied) and end + 1 == occupied[insert_idx][0]:
+                            score += 100
+                        
+                        if score > best_score:
+                            best_score = score
+                            best_counter = counter_id
+                            best_insert_idx = insert_idx
+            
+            # Step 3: use a new empty counter
+            if best_counter is None:
+                if empty_idx < len(empty_counters):
+                    best_counter = empty_counters[empty_idx]
+                    print(f"  Assigning officer {officer_id} interval {interval} to NEW counter {best_counter} (C{best_counter+1})")
+                    counter_occupied[best_counter] = []  # Initialize this counter
+                    empty_idx += 1
+                    best_insert_idx = 0
+                else:
+                    print(f"ERROR: No available counter for officer {officer_id}, interval {interval}")
+                    continue
+            
+            # Place officer in counter
+            counter_occupied[best_counter].insert(best_insert_idx, (start, end, officer_id))
+            # Fill the matrix (inclusive range)
+            counter_matrix[best_counter, start:end+1] = f"S{officer_id}"
+    
+    # Print statistics
+    used_counters = sum(1 for c in counter_occupied if any(o[2] != 'RESERVED' for o in counter_occupied[c]))
+    partial_used = sum(1 for c in partial_empty_rows if any(o[2] != 'RESERVED' for o in counter_occupied[c]))
+    new_empty_used = used_counters - partial_used
+    
+    print(f"\nAssignment Statistics:")
+    print(f"  Partial counters used: {partial_used}/{len(partial_empty_rows)}")
+    print(f"  New empty counters used: {new_empty_used}")
+    print(f"  Total counters used: {used_counters}/{total_counters}")
+    
+    # Print partial counter validation
+    print(f"\nPartial Counter Validation:")
+    for counter_id, avail_ranges in partial_empty_rows.items():
+        assignments = [o for o in counter_occupied[counter_id] if o[2] != 'RESERVED']
+        print(f"  Counter {counter_id}: available {avail_ranges}, assigned {len(assignments)} intervals")
+        for s, e, oid in assignments:
+            # Verify each assignment is within available ranges
+            in_range = any(s >= as_ and e <= ae for as_, ae in avail_ranges)
+            status = "✓" if in_range else "✗ VIOLATION"
+            print(f"    ({s},{e}) officer {oid} {status}")
+    
+    return counter_matrix
 # ================================================================
 counter_priority_list = [41] + [n for offset in range(0,10) for n in range(40 - offset, 0, -10)]
 # === Example usage ===
@@ -863,19 +1048,175 @@ print('===partial paths===')
 for i, path in enumerate(partial_paths, 1):
     print(f"Path {i}: {path}")
 
+print("===========schedule intervals==============")
+print(schedule_intervals)
+
 sos_counter_manning = fill_sos_counter_manning(counter_matrix, counter_priority_list, paths, schedule_intervals_to_officers)
 
 prefixed_counter_matrix = prefix_non_zero(counter_matrix, "M")
-print("===prefixed_counter_matrix===")
-print(prefixed_counter_matrix)
+# print("===prefixed_counter_matrix===")
+# print(prefixed_counter_matrix)
 
-prefixed_sos_counter_manning = prefix_non_zero(sos_counter_manning, "S")
-print("===prefixed_sos_counter_manning===")
-print(prefixed_sos_counter_manning)
+# prefixed_sos_counter_manning = prefix_non_zero(sos_counter_manning, "S")
+# # print("===prefixed_sos_counter_manning===")
+# # print(prefixed_sos_counter_manning)
+
+# merged = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
+# print(merged)
+# print("Merged Counter Matrix (counter # : sos officers):")
+# for i, row in enumerate(merged):
+#     print(f"AC {counter_no[i]:2}: {format_slots_with_sep(row)}")
+
+import numpy as np
+import plotly.graph_objects as go
+
+def plot_officer_timetable_with_labels(counter_matrix):
+    """
+    Plots an interactive timetable with officer IDs inside each cell.
+    Consecutive cells with the same officer are merged with one label and thick border.
+    
+    Parameters:
+    - counter_matrix: 2D numpy array or list of lists
+        Shape: (num_time_slots, num_counters) = (48, 41)
+        counter_matrix[i, j] = officer at time_slot i, counter j
+    
+    Returns:
+    - fig: Plotly Figure object
+    """
+    counter_matrix = np.array(counter_matrix)
+    time_slots, num_counters = counter_matrix.shape  # (48, 41)
+    
+    # Create numeric matrix for colors
+    color_matrix = np.zeros((time_slots, num_counters), dtype=int)
+    for i in range(time_slots):
+        for j in range(num_counters):
+            val = str(counter_matrix[i, j])
+            if val.startswith('M'):
+                color_matrix[i, j] = 1
+            elif val.startswith('S'):
+                color_matrix[i, j] = 2
+            else:
+                color_matrix[i, j] = 0
+    
+    # Create heatmap
+    heatmap = go.Heatmap(
+        z=color_matrix,
+        y=[f'C{t+1}' for t in range(time_slots)],
+        x=[f'T{c}' for c in range(num_counters)],
+        showscale=False,
+        colorscale=[
+            [0, '#2E2C2C'],
+            [0.5, '#a2d2ff'],
+            [1, '#ffc6d9']
+        ]
+    )
+    
+    # Find merged regions (consecutive horizontal cells with same officer)
+    annotations = []
+    shapes = []
+    
+    for i in range(time_slots):
+        j = 0
+        while j < num_counters:
+            officer = str(counter_matrix[i, j])
+            if officer != '0':
+                # Find the end of this consecutive block
+                j_end = j
+                while j_end < num_counters and str(counter_matrix[i, j_end]) == officer:
+                    j_end += 1
+                
+                # Add annotation at the center of the merged region
+                center_x = (j + j_end - 1) / 2
+                annotations.append(
+                    dict(
+                        x=center_x,
+                        y=i,
+                        text=officer,
+                        showarrow=False,
+                        font=dict(color='black', size=10)
+                    )
+                )
+                
+                # Add border around the merged region
+                shapes.append(
+                    dict(
+                        type='rect',
+                        x0=j - 0.5,
+                        x1=j_end - 0.5,
+                        y0=i - 0.5,
+                        y1=i + 0.5,
+                        line=dict(color='black', width=2),
+                        fillcolor='rgba(0,0,0,0)'
+                    )
+                )
+                
+                j = j_end
+            else:
+                j += 1
+    
+    # Create figure
+    fig = go.Figure(data=[heatmap])
+    fig.update_layout(
+        title='Officer Timetable',
+        xaxis_title='Time Slot',
+        yaxis_title='Counter',
+        width=1400,
+        height=900,
+        annotations=annotations,
+        shapes=shapes,
+        yaxis_autorange='reversed'
+    )
+    fig.show()
+    return fig
+# Assuming your matrix is called `merged`
+#plot_officer_timetable_with_labels(merged)
+
+
+import numpy as np
+
+def find_empty_rows(counter_matrix):
+    counter_matrix = np.array(counter_matrix)
+    empty_rows = []
+    partial_empty_rows = {}
+
+    for i, row in enumerate(counter_matrix):
+        zero_indices = np.where(row == 0)[0]
+        zero_indices = zero_indices.astype(int)  # convert to native int
+        if len(zero_indices) == 0:
+            continue  # no zeros, skip
+        if len(zero_indices) == len(row):
+            empty_rows.append(i)  # entire row is zero
+        else:
+            # find consecutive zero ranges
+            ranges = []
+            start = zero_indices[0]
+            for j in range(1, len(zero_indices)):
+                if zero_indices[j] != zero_indices[j-1] + 1:
+                    end = zero_indices[j-1]
+                    ranges.append((int(start), int(end)))
+                    start = zero_indices[j]
+            ranges.append((int(start), int(zero_indices[-1])))  # last range
+            partial_empty_rows[i] = ranges
+    partial_empty_rows_index = list({t for ranges in partial_empty_rows.values() for t in ranges})
+    # Optional: sort by first element for readability
+    partial_empty_rows_index.sort()
+    return empty_rows, partial_empty_rows, partial_empty_rows_index
+
+empty_rows, partial_empty_rows, partial_empty_rows_index = find_empty_rows(counter_matrix)
+empty_rows.sort(key=lambda x: counter_priority_list.index(x + 1) if (x + 1) in counter_priority_list else float('inf'))
+   
+print("Empty rows:", empty_rows)
+
+print("Partial empty rows:", partial_empty_rows)
+
+print('partial empty rows index', partial_empty_rows_index)
+
+prefixed_sos_counter_manning = slot_officers_matrix_gap_aware(
+    schedule_intervals_to_officers, 
+    partial_empty_rows,
+    total_counters=41, 
+    total_slots=48)
+
 
 merged = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
-print(merged)
-print("Merged Counter Matrix (counter # : sos officers):")
-for i, row in enumerate(merged):
-    print(f"AC {counter_no[i]:2}: {format_slots_with_sep(row)}")
-
+plot_officer_timetable_with_labels(merged)
