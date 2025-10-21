@@ -293,10 +293,8 @@ def officer_to_counter_matrix(officer_matrix):
             if counter != 0:
                 # subtract 1 since row 0 = counter 1
                 counter_matrix[counter-1, slot] = officer_idx
-    
-    counter_matrix_row_names = [f'{i+1}' for i in range(num_counters)]
-    
-    return counter_matrix, counter_matrix_row_names
+
+    return counter_matrix
 
 def find_partial_availability(counter_matrix):
     """
@@ -1291,7 +1289,9 @@ def plot_officer_schedule_with_labels(officer_schedule):
             [0, '#2E2C2C'],     # Unassigned
             [0.5, '#a2d2ff'],   # M-type
             [1, '#ffc6d9']      # S-type
-        ]
+        ],
+        zmin=0,
+        zmax=2
     )
 
     annotations = []
@@ -1386,30 +1386,33 @@ def find_empty_rows(counter_matrix):
 def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers):
     main_officers_template = init_main_officers_template()
     main_officers_schedule, reported_officers, valid_ro_ra = generate_main_officers_schedule(main_officers_template, main_officers_reported, report_gl_counters, ro_ra_officers )
-    counter_matrix_wo_last, counter_no = officer_to_counter_matrix(main_officers_schedule)
+    counter_matrix_wo_last = officer_to_counter_matrix(main_officers_schedule)
     officer_last_counter, empty_counters_2030 = get_officer_last_counter_and_empty_counters(
     reported_officers, valid_ro_ra, counter_matrix_wo_last)
     updated_main_officers_schedule = update_main_officers_schedule_last_counter(
         main_officers_schedule, officer_last_counter, empty_counters_2030)
-    counter_matrix, counter_no = officer_to_counter_matrix(updated_main_officers_schedule)
-    counter_w_partial_availability = find_partial_availability(counter_matrix)
-    officer_names, base_schedules = build_officer_schedules(sos_timings)
-    all_break_schedules = generate_break_schedules(base_schedules, officer_names)
-    chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
-        base_schedules,None,all_break_schedules,beam_width=20)
-    print(min_penalty)
-    sos_schedule_matrix = generate_sos_schedule_matrix(chosen_schedule_indices, all_break_schedules, officer_names)
-    schedule_intervals_to_officers, schedule_intervals = get_intervals_from_schedule(sos_schedule_matrix)
-    chains = greedy_longest_partition_inclusive(schedule_intervals)
-    print("=== best work count ===")
-    print(best_work_count)
-    prefixed_counter_matrix = prefix_non_zero(counter_matrix, "M")
-    empty_rows, partial_empty_rows, partial_empty_rows_index = find_empty_rows(counter_matrix)
-    prefixed_sos_counter_manning = slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows)
-    final_counter_matrix = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
-    officer_schedule = counter_to_officer_schedule(final_counter_matrix)
-    print(final_counter_matrix)
-    print(final_counter_matrix.shape)
+    counter_matrix = officer_to_counter_matrix(updated_main_officers_schedule)
+    if len(sos_timings) >0:
+        #counter_w_partial_availability = find_partial_availability(counter_matrix)
+        officer_names, base_schedules = build_officer_schedules(sos_timings)
+        all_break_schedules = generate_break_schedules(base_schedules, officer_names)
+        chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
+            base_schedules,None,all_break_schedules,beam_width=20)
+        print(min_penalty)
+        sos_schedule_matrix = generate_sos_schedule_matrix(chosen_schedule_indices, all_break_schedules, officer_names)
+        schedule_intervals_to_officers, schedule_intervals = get_intervals_from_schedule(sos_schedule_matrix)
+        chains = greedy_longest_partition_inclusive(schedule_intervals)
+        print("=== best work count ===")
+        print(best_work_count)
+        prefixed_counter_matrix = prefix_non_zero(counter_matrix, "M")
+        empty_rows, partial_empty_rows, partial_empty_rows_index = find_empty_rows(counter_matrix)
+        prefixed_sos_counter_manning = slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows)
+        final_counter_matrix = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
+        officer_schedule = counter_to_officer_schedule(final_counter_matrix)
+        print(final_counter_matrix)
+        print(final_counter_matrix.shape)
 
-    return final_counter_matrix, officer_schedule
+        return final_counter_matrix, officer_schedule
+    else:
+        return counter_matrix, updated_main_officers_schedule
 # ================================================================

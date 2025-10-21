@@ -16,19 +16,22 @@ ro_ra_officers = st.text_input("RO/RA Officers", value="3RO2100, 11RO1700,15RO21
 
 # === Generate button ===
 if st.button("Generate Schedule"):
-    # Run the backend algorithm only when button is clicked
-    final_counter_matrix, officer_schedule = run_algo(
-        main_officers_reported,
-        report_gl_counters,
-        sos_timings,
-        ro_ra_officers
-    )
+    if not main_officers_reported.strip():
+        st.error("⚠️ 'Main Officers Reported' is a required field. Please enter a value before submitting.")
+    else:
+        # Run the backend algorithm only when input is valid
+        final_counter_matrix, officer_schedule = run_algo(
+            main_officers_reported,
+            report_gl_counters,
+            sos_timings,
+            ro_ra_officers
+        )
 
-    # Display outputs
-    st.subheader("Counter Matrix Timetable")
-    fig1 = plot_officer_timetable_with_labels(final_counter_matrix)
-    st.plotly_chart(fig1, use_container_width=True)
+        # Display outputs
+        st.subheader("Counter Matrix Timetable")
+        fig1 = plot_officer_timetable_with_labels(final_counter_matrix)
+        st.plotly_chart(fig1, use_container_width=True)
 
-    st.subheader("Officer Schedule Timetable")
-    fig2 = plot_officer_schedule_with_labels(officer_schedule)
-    st.plotly_chart(fig2, use_container_width=True)
+        st.subheader("Officer Schedule Timetable")
+        fig2 = plot_officer_schedule_with_labels(officer_schedule)
+        st.plotly_chart(fig2, use_container_width=True)
