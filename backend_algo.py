@@ -767,7 +767,7 @@ def greedy_longest_partition_inclusive(intervals):
             intervals.remove(iv)
 
     return paths
-
+'''
 def max_coverage_paths_inclusive(chains):
     """
     chains: list of chains, each chain = list of inclusive intervals [(start, end), ...]
@@ -814,6 +814,9 @@ def max_coverage_paths_inclusive(chains):
     flattened_paths = [sum(path, []) for path in all_paths]
     return flattened_paths
 
+    paths = max_coverage_paths_inclusive(chains)
+'''
+
 def split_full_partial_paths(paths, target_length=48):
     """
     Splits a list of paths into full paths (covering target_length exactly) 
@@ -838,7 +841,7 @@ def split_full_partial_paths(paths, target_length=48):
 
     return full_paths, partial_paths
 
-
+'''
 def fill_sos_counter_manning(counter_matrix, paths, schedule_intervals_to_officers):
     # Deep copy so the original dict is not modified
     schedule_copy = copy.deepcopy(schedule_intervals_to_officers)
@@ -876,6 +879,7 @@ def fill_sos_counter_manning(counter_matrix, paths, schedule_intervals_to_office
             else:
                 print(f"Cannot find officer for interval {interval}")
     return sos_counter_manning
+'''
 
 def prefix_non_zero(counter_matrix, prefix):
     # Create an empty array of same shape, dtype=object to hold strings
@@ -965,9 +969,9 @@ def slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty
     empty_counters = [c - 1 for c in empty_counters]  # Convert to 0-indexed
     # Filter out any counters that are already partial
     empty_counters = [c for c in empty_counters if c not in partial_empty_rows]
-    print(f"Available empty counters (0-indexed) after filtering: {empty_counters}")
-    print(f"Available empty counters (display names): {['C' + str(c+1) for c in empty_counters]}")
-    print(f"Partial counters: {list(partial_empty_rows.keys())}")
+    # print(f"Available empty counters (0-indexed) after filtering: {empty_counters}")
+    # print(f"Available empty counters (display names): {['C' + str(c+1) for c in empty_counters]}")
+    # print(f"Partial counters: {list(partial_empty_rows.keys())}")
     empty_idx = 0
     
     # Sort intervals by start time, then by end time
@@ -1076,17 +1080,70 @@ def slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty
     print(f"  Total counters used: {used_counters}/{NUM_COUNTERS}")
     
     # Print partial counter validation
-    print(f"\nPartial Counter Validation:")
+    #print(f"\nPartial Counter Validation:")
     for counter_id, avail_ranges in partial_empty_rows.items():
         assignments = [o for o in counter_occupied[counter_id] if o[2] != 'RESERVED']
-        print(f"  Counter {counter_id}: available {avail_ranges}, assigned {len(assignments)} intervals")
+        #print(f"  Counter {counter_id}: available {avail_ranges}, assigned {len(assignments)} intervals")
         for s, e, oid in assignments:
             # Verify each assignment is within available ranges
             in_range = any(s >= as_ and e <= ae for as_, ae in avail_ranges)
             status = "✓" if in_range else "✗ VIOLATION"
-            print(f"    ({s},{e}) officer {oid} {status}")
+            #print(f"    ({s},{e}) officer {oid} {status}")
+            
     
     return counter_matrix
+
+import numpy as np
+
+def counter_to_officer_schedule(counter_matrix):
+    """
+    Convert counter_matrix (counters x time slots) to officer_schedule dict.
+
+    Parameters
+    ----------
+    counter_matrix : np.ndarray
+        Shape (num_counters, num_slots)
+        Each element = officer_id (e.g., 'M1', 'S2', or '0')
+
+    Returns
+    -------
+    officer_schedule : dict
+        Keys = officer IDs (e.g., 'M1', 'S2')
+        Values = list of length num_slots, 
+                  each element = counter number assigned at that slot (int), or 0 if not assigned
+    """
+    num_counters, num_slots = counter_matrix.shape
+    officer_schedule = {}
+
+    for counter_idx in range(num_counters):
+        for slot in range(num_slots):
+            officer_id = counter_matrix[counter_idx, slot]
+            if officer_id == '0':
+                continue
+            if officer_id not in officer_schedule:
+                officer_schedule[officer_id] = [0] * num_slots
+            officer_schedule[officer_id][slot] = counter_idx + 1  # counter 1-indexed
+
+    prefix_order = {'M': 0, 'S': 1, 'OT': 2}
+
+    def sort_key(k):
+        if k.startswith('OT'):
+            prefix = 'OT'
+            num_part = k[2:]
+        else:
+            prefix = k[0]
+            num_part = k[1:]
+        try:
+            num_val = int(num_part)
+        except ValueError:
+            num_val = float('inf')
+        return (prefix_order.get(prefix, 99), num_val)
+
+    # Sort and rebuild the dict
+    sorted_keys = sorted(officer_schedule.keys(), key=sort_key)
+    sorted_schedule = {k: officer_schedule[k] for k in sorted_keys}
+
+    return sorted_schedule #sorted officer schedule
 
 def plot_officer_timetable_with_labels(counter_matrix):
     """
@@ -1151,7 +1208,7 @@ def plot_officer_timetable_with_labels(counter_matrix):
                         y=i,
                         text=officer,
                         showarrow=False,
-                        font=dict(color='black', size=10)
+                        font=dict(color='black', size=18)
                     )
                 )
                 
@@ -1163,7 +1220,7 @@ def plot_officer_timetable_with_labels(counter_matrix):
                         x1=j_end - 0.5,
                         y0=i - 0.5,
                         y1=i + 0.5,
-                        line=dict(color='black', width=2),
+                        line=dict(color='black', width=1),
                         fillcolor='rgba(0,0,0,0)'
                     )
                 )
@@ -1178,16 +1235,122 @@ def plot_officer_timetable_with_labels(counter_matrix):
         title='Officer Timetable',
         xaxis_title='Time Slot',
         yaxis_title='Counter',
-        width=1400,
-        height=900,
+        width=900,
+        height=1000,
         annotations=annotations,
         shapes=shapes,
-        yaxis_autorange='reversed'
+        yaxis_autorange='reversed',
+        dragmode = False
     )
     return fig
 # Assuming your matrix is called `merged`
 #plot_officer_timetable_with_labels(merged)
 
+import numpy as np
+import plotly.graph_objects as go
+
+def plot_officer_schedule_with_labels(officer_schedule):
+    """
+    Plots an interactive timetable showing each officer's assigned counter at each time slot.
+    Consecutive same-counter assignments are merged and bordered.
+
+    Parameters
+    ----------
+    officer_schedule : dict
+        Keys = officer IDs (e.g., 'M1', 'S2', ...)
+        Values = list of counter numbers (int) for each time slot (0 = unassigned)
+
+    Returns
+    -------
+    fig : plotly.graph_objects.Figure
+    """
+    officers = list(officer_schedule.keys())
+    num_officers = len(officers)
+    num_slots = len(next(iter(officer_schedule.values())))
+
+    # Build numeric color matrix for background color coding
+    color_matrix = np.zeros((num_officers, num_slots), dtype=int)
+    label_matrix = np.empty((num_officers, num_slots), dtype=object)
+
+    for i, officer_id in enumerate(officers):
+        for t, counter in enumerate(officer_schedule[officer_id]):
+            if counter != 0:
+                color_matrix[i, t] = 1 if officer_id.startswith('M') else 2
+                label_matrix[i, t] = f'C{counter}'
+            else:
+                color_matrix[i, t] = 0
+                label_matrix[i, t] = ''
+
+    # Base heatmap
+    heatmap = go.Heatmap(
+        z=color_matrix,
+        y=officers,
+        x=[f'T{t+1}' for t in range(num_slots)],
+        showscale=False,
+        colorscale=[
+            [0, '#2E2C2C'],     # Unassigned
+            [0.5, '#a2d2ff'],   # M-type
+            [1, '#ffc6d9']      # S-type
+        ]
+    )
+
+    annotations = []
+    shapes = []
+
+    # Merge consecutive same-counter cells horizontally
+    for i, officer_id in enumerate(officers):
+        t = 0
+        while t < num_slots:
+            counter = officer_schedule[officer_id][t]
+            if counter != 0:
+                t_end = t
+                while t_end < num_slots and officer_schedule[officer_id][t_end] == counter:
+                    t_end += 1
+
+                # Add merged label at center of block
+                center_x = (t + t_end - 1) / 2
+                annotations.append(
+                    dict(
+                        x=center_x,
+                        y=officer_id,
+                        text=f'C{counter}',
+                        showarrow=False,
+                        font=dict(color='black', size=18)
+                    )
+                )
+
+                # Add thick border around merged region
+                shapes.append(
+                    dict(
+                        type='rect',
+                        x0=t - 0.5,
+                        x1=t_end - 0.5,
+                        y0=i - 0.5,
+                        y1=i + 0.5,
+                        line=dict(color='black', width=1),
+                        fillcolor='rgba(0,0,0,0)'
+                    )
+                )
+
+                t = t_end
+            else:
+                t += 1
+
+    # Build figure
+    fig = go.Figure(data=[heatmap])
+    fig.update_layout(
+        title="Officer Timetable (Counter Assignments)",
+        xaxis_title="Time Slot",
+        yaxis_title="Officer",
+        width=900,
+        height=900,
+        annotations=annotations,
+        shapes=shapes,
+        yaxis_autorange='reversed',
+        dragmode=False
+    )
+
+    return fig
 
 import numpy as np
 
@@ -1220,4 +1383,33 @@ def find_empty_rows(counter_matrix):
     empty_rows.sort(key=lambda x: counter_priority_list.index(x + 1) if (x + 1) in counter_priority_list else float('inf'))
     return empty_rows, partial_empty_rows, partial_empty_rows_index
 
+def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers):
+    main_officers_template = init_main_officers_template()
+    main_officers_schedule, reported_officers, valid_ro_ra = generate_main_officers_schedule(main_officers_template, main_officers_reported, report_gl_counters, ro_ra_officers )
+    counter_matrix_wo_last, counter_no = officer_to_counter_matrix(main_officers_schedule)
+    officer_last_counter, empty_counters_2030 = get_officer_last_counter_and_empty_counters(
+    reported_officers, valid_ro_ra, counter_matrix_wo_last)
+    updated_main_officers_schedule = update_main_officers_schedule_last_counter(
+        main_officers_schedule, officer_last_counter, empty_counters_2030)
+    counter_matrix, counter_no = officer_to_counter_matrix(updated_main_officers_schedule)
+    counter_w_partial_availability = find_partial_availability(counter_matrix)
+    officer_names, base_schedules = build_officer_schedules(sos_timings)
+    all_break_schedules = generate_break_schedules(base_schedules, officer_names)
+    chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
+        base_schedules,None,all_break_schedules,beam_width=20)
+    print(min_penalty)
+    sos_schedule_matrix = generate_sos_schedule_matrix(chosen_schedule_indices, all_break_schedules, officer_names)
+    schedule_intervals_to_officers, schedule_intervals = get_intervals_from_schedule(sos_schedule_matrix)
+    chains = greedy_longest_partition_inclusive(schedule_intervals)
+    print("=== best work count ===")
+    print(best_work_count)
+    prefixed_counter_matrix = prefix_non_zero(counter_matrix, "M")
+    empty_rows, partial_empty_rows, partial_empty_rows_index = find_empty_rows(counter_matrix)
+    prefixed_sos_counter_manning = slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows)
+    final_counter_matrix = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
+    officer_schedule = counter_to_officer_schedule(final_counter_matrix)
+    print(final_counter_matrix)
+    print(final_counter_matrix.shape)
+
+    return final_counter_matrix, officer_schedule
 # ================================================================
