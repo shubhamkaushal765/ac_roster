@@ -286,13 +286,13 @@ def officer_to_counter_matrix(officer_matrix):
     """
     num_counters = 41  # counters 1..41
     num_slots = len(next(iter(officer_matrix.values())))
-    counter_matrix = np.zeros((num_counters, num_slots), dtype=int)
+    counter_matrix = np.zeros((num_counters, num_slots), dtype=object)
     
     for officer_idx, arr in enumerate(officer_matrix.values(), start=1):
         for slot, counter in enumerate(arr):
             if counter != 0:
                 # subtract 1 since row 0 = counter 1
-                counter_matrix[counter-1, slot] = officer_idx
+                counter_matrix[counter-1, slot] = f'M{officer_idx}'
 
     return counter_matrix
 
@@ -679,7 +679,8 @@ def generate_sos_schedule_matrix(saved_indices, all_break_schedules, officer_nam
     num_officers = len(saved_indices)
     num_slots = len(next(iter(all_break_schedules[officer_names[0]])))  # assume all schedules same length
     
-    sos_schedule_matrix = np.zeros((num_officers, num_slots), dtype=int)
+    sos_schedule_matrix = np.zeros((num_officers, num_slots), dtype=object)
+    sos_schedule_matrix[sos_schedule_matrix == 0] = '0'
     
     for i, officer in enumerate(officer_names):
         idx = saved_indices[i]
@@ -715,106 +716,6 @@ def get_intervals_from_schedule(sos_schedule_matrix):
         schedule_intervals.extend([interval] * len(rows))
     return dict(interval_dict), schedule_intervals
 
-def greedy_longest_partition_inclusive(intervals):
-    """
-    Partition inclusive intervals into disjoint paths.
-    Always pick the longest available path first.
-    
-    Inclusive intervals: (start, end) means both start and end are included.
-    """
-    intervals = intervals[:]  # copy
-    paths = []
-
-    def build_longest_path(remaining):
-        # Build adjacency: start -> intervals
-        start_map = defaultdict(list)
-        for s, e in remaining:
-            start_map[s].append((s, e))
-
-        best_path = []
-
-        def dfs(path, current_end, visited):
-            nonlocal best_path
-            if len(path) > len(best_path):
-                best_path = path[:]
-
-            next_start = current_end + 1  # for inclusive intervals
-            if next_start not in start_map:
-                return
-
-            for nxt in start_map[next_start]:
-                if nxt not in visited:
-                    visited.add(nxt)
-                    dfs(path + [nxt], nxt[1], visited)
-                    visited.remove(nxt)
-
-        # Try starting from every interval
-        for interval in remaining:
-            dfs([interval], interval[1], {interval})
-
-        return best_path
-
-    # Keep extracting longest paths until no intervals remain
-    while intervals:
-        longest = build_longest_path(intervals)
-        if not longest:  # safety check
-            break
-        paths.append(longest)
-        # Remove used intervals
-        for iv in longest:
-            intervals.remove(iv)
-
-    return paths
-'''
-def max_coverage_paths_inclusive(chains):
-    """
-    chains: list of chains, each chain = list of inclusive intervals [(start, end), ...]
-    Returns flattened paths covering maximum ranges using inclusive logic.
-    """
-    # Assign unique indices to chains
-    chain_indices = list(range(len(chains)))
-    remaining_chains = set(chain_indices)
-    all_paths = []
-
-    while remaining_chains:
-        best_path = []
-        best_coverage = -1
-
-        def dfs(path, coverage_end, used_chains):
-            nonlocal best_path, best_coverage
-
-            # Update best path if current coverage is better
-            if coverage_end > best_coverage:
-                best_coverage = coverage_end
-                best_path = path[:]
-
-            for idx in list(remaining_chains):
-                if idx in used_chains:
-                    continue
-                chain = chains[idx]
-                chain_start = chain[0][0]
-                if chain_start >= coverage_end + 1:  # inclusive: next interval can start at coverage_end + 1
-                    dfs(path + [chain], chain[-1][1], used_chains | {idx})
-
-        # Run DFS starting with empty path
-        dfs([], -1, set())  # start coverage at -1 to allow starting at 0
-
-        # Commit the best path found
-        all_paths.append(best_path)
-        for chain in best_path:
-            # Find its index and remove from remaining_chains
-            for i in remaining_chains:
-                if chains[i] == chain:
-                    remaining_chains.remove(i)
-                    break
-
-    # Flatten the paths
-    flattened_paths = [sum(path, []) for path in all_paths]
-    return flattened_paths
-
-    paths = max_coverage_paths_inclusive(chains)
-'''
-
 def split_full_partial_paths(paths, target_length=48):
     """
     Splits a list of paths into full paths (covering target_length exactly) 
@@ -839,46 +740,6 @@ def split_full_partial_paths(paths, target_length=48):
 
     return full_paths, partial_paths
 
-'''
-def fill_sos_counter_manning(counter_matrix, paths, schedule_intervals_to_officers):
-    # Deep copy so the original dict is not modified
-    schedule_copy = copy.deepcopy(schedule_intervals_to_officers)
-    
-    # Find empty counters
-    zero_rows = np.where(np.all(counter_matrix == 0, axis=1))[0]
-    empty_counters = (zero_rows + 1).tolist()
-    
-    # Sort empty_counters according to the order in counter_priority_list
-    empty_counters.sort(key=lambda x: counter_priority_list.index(x + 1) if (x + 1) in counter_priority_list else float('inf'))
-    print(empty_counters)
-    # Initialize sos_counter_manning (41 rows, 48 columns)
-    sos_counter_manning = np.zeros((NUM_COUNTERS, NUM_SLOTS), dtype=int)
-    
-    for i, each_path in enumerate(paths):
-        if not empty_counters:
-            print("No available counters left for path", i)
-            break
-        
-        # Pick the first available counter (highest priority)
-        priority_counter = empty_counters.pop(0)
-        #print(f"Assigning path {i} to counter {priority_counter}")
-        
-        # Fill the intervals in the chosen counter
-        for interval in each_path:
-            start_index, end_index = interval
-            
-            if interval in schedule_copy and schedule_copy[interval]:
-                officer_id = schedule_copy[interval].pop(0)
-                #print(f"Interval {interval} -> Officer {officer_id}")
-                
-                # Fill in the sos_counter_manning row for this interval
-                sos_counter_manning[priority_counter-1, start_index:end_index+1] = officer_id
-                
-            else:
-                print(f"Cannot find officer for interval {interval}")
-    return sos_counter_manning
-'''
-
 def prefix_non_zero(counter_matrix, prefix):
     # Create an empty array of same shape, dtype=object to hold strings
     result = np.empty(counter_matrix.shape, dtype=object)
@@ -890,6 +751,126 @@ def prefix_non_zero(counter_matrix, prefix):
     result[counter_matrix != 0] = [prefix + str(x) for x in counter_matrix[counter_matrix != 0]]
     
     return result
+
+def add_sos_officers(schedule_intervals_to_officers, main_counter_matrix):
+    """
+    Assign officers to counters using gap-aware greedy interval packing.
+
+    Args:
+        schedule_intervals_to_officers: dict {(start,end): [officer_ids]}
+        main_counter_matrix: np.array of shape (total_counters, total_slots)
+        
+
+    Returns:
+        sos_counter_matrix: np.array of shape (total_counters, total_slots)
+                        each element is officer_id or '0'
+    """
+    # Create duplicate matrix
+    sos_main_counter_matrix = main_counter_matrix.copy()
+    sos_counter_matrix = np.full((NUM_COUNTERS, NUM_SLOTS), '0', dtype=object)
+    
+    # Priority list for step 3 (1-indexed: 1 to 41)
+    counter_priority_list = [41] + [n for offset in range(0, 10) for n in range(40 - offset, 0, -10)]
+    
+    # Sort intervals by start time, then by end time
+    sorted_intervals = sorted(schedule_intervals_to_officers.items(), 
+                             key=lambda x: (x[0][0], x[0][1]))
+    
+    # Helper: check if interval is empty in a counter
+    def is_interval_empty(counter_id, start, end):
+        """Check if all slots in [start, end] are '0' in sos_main_counter_matrix"""
+        return np.all(sos_main_counter_matrix[counter_id - 1, start:end+1] == '0')
+    
+    # Helper: check if interval connects to existing assignments
+    def is_connected(counter_id, start, end):
+        """Check if interval connects to previous or next non-zero slot"""
+        # Check connection to previous slot
+        if start > 0 and sos_counter_matrix[counter_id - 1, start - 1] != '0':
+            return True
+        # Check connection to next slot
+        if end < NUM_SLOTS - 1 and sos_counter_matrix[counter_id - 1, end + 1] != '0':
+            return True
+        return False
+    
+    # Helper: get partial empty counters based on current state
+    def get_partial_empty_counters():
+        """Get counters that are partially empty (at least 1 non-zero and at least 1 zero)"""
+        partial_counters = []
+        for counter_id in range(1, NUM_COUNTERS + 1):
+            row = sos_main_counter_matrix[counter_id - 1]
+            # Counter is partially empty if at least 1 element is non-zero and at least 1 is zero
+            if np.any(row != '0') and np.any(row == '0'):
+                partial_counters.append(counter_id)
+        return partial_counters
+    
+    # Helper: get counters with SOS assignments (not partial, not empty)
+    def get_used_sos_counters(partial_counters):
+        """Get counters that have SOS assignments but aren't partial or empty"""
+        used_counters = []
+        for counter_id in range(1, NUM_COUNTERS + 1):
+            # Skip if partial
+            if counter_id in partial_counters:
+                continue
+            # Check if this counter has any SOS assignments
+            if np.any(sos_counter_matrix[counter_id - 1] != '0'):
+                used_counters.append(counter_id)
+        return used_counters
+    
+    for interval, officer_ids in sorted_intervals:
+        start, end = interval
+        
+        for officer_id in officer_ids:
+            best_counter = None
+            best_score = -1
+            
+            # Get current partial counters
+            partial_counters = get_partial_empty_counters()
+            
+            # Step 1: try partial counters first (must be CONNECTED to previous or next)
+            for counter_id in partial_counters:
+                if is_interval_empty(counter_id, start, end):
+                    if is_connected(counter_id, start, end):
+                        score = 100  # Connected to existing assignment
+                        if score > best_score:
+                            best_score = score
+                            best_counter = counter_id
+            
+            # Step 2: try already used SOS counters (must be CONNECTED)
+            if best_counter is None:
+                used_sos_counters = get_used_sos_counters(partial_counters)
+                for counter_id in used_sos_counters:
+                    if is_interval_empty(counter_id, start, end):
+                        if is_connected(counter_id, start, end):
+                            score = 100
+                            if score > best_score:
+                                best_score = score
+                                best_counter = counter_id
+            
+            # Step 3: iterate through counter_priority_list in order
+            if best_counter is None:
+                for priority_counter in counter_priority_list:
+                    if is_interval_empty(priority_counter, start, end):
+                        best_counter = priority_counter
+                        break
+                
+                if best_counter is None:
+                    print(f"ERROR: No available counter for officer {officer_id}, interval {interval}")
+                    continue
+            
+            # Assign officer to counter
+            sos_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id}"
+            sos_main_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id}"
+    
+    # Print statistics
+    final_partial = get_partial_empty_counters()
+    used_counters = sum(1 for c in range(1, NUM_COUNTERS + 1) 
+                       if np.any(sos_counter_matrix[c - 1] != '0'))
+    
+    print(f"\nAssignment Statistics:")
+    print(f"  Partial counters at end: {len(final_partial)}")
+    print(f"  Total counters used for SOS: {used_counters}/{NUM_COUNTERS}")
+    
+    return sos_counter_matrix
 
 def merge_prefixed_matrices(counter_matrix, sos_matrix):
     """
@@ -911,187 +892,6 @@ def merge_prefixed_matrices(counter_matrix, sos_matrix):
     merged_matrix = np.where(sos_matrix != '0', sos_matrix, counter_matrix)
     
     return merged_matrix
-
-def format_slots_with_sep(row, sep_every=4):
-    formatted = []
-    for i, x in enumerate(row):
-        formatted.append(f"{x:4}" if str(x) != '0' else " .  ")
-        if (i + 1) % sep_every == 0 and (i + 1) != len(row):
-            formatted.append("|")  # add separator
-    return ' '.join(formatted)
-
-def slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows):
-    """
-    Assign officers to counters using gap-aware greedy interval packing.
-
-    Args:
-        schedule_intervals_to_officers: dict {(start,end): [officer_ids]}
-        partial_empty_rows: dict {counter_id: [(avail_start, avail_end), ...]}
-        NUM_COUNTERS: number of counters
-        NUM_SLOTS: number of time slots
-
-    Returns:
-        counter_matrix: np.array of shape (total_counters, total_slots)
-                        each element is officer_id or '0'
-    """
-    counter_matrix = np.full((NUM_COUNTERS, NUM_SLOTS), '0', dtype=object)
-    
-    # Track occupied intervals per counter: counter_id -> sorted list of (start,end,officer_id)
-    # ONLY initialize counters we can actually use
-    counter_occupied = {}
-    
-    # CRITICAL FIX: Initialize partial counters with RESERVED blocks for unavailable ranges
-    for counter_id, avail_ranges in partial_empty_rows.items():
-        reserved = []
-        sorted_ranges = sorted(avail_ranges)
-        
-        # Mark everything before first available range as RESERVED
-        if sorted_ranges[0][0] > 0:
-            reserved.append((0, sorted_ranges[0][0] - 1, 'RESERVED'))
-        
-        # Mark gaps between available ranges as RESERVED
-        for i in range(len(sorted_ranges) - 1):
-            gap_start = sorted_ranges[i][1] + 1
-            gap_end = sorted_ranges[i + 1][0] - 1
-            if gap_start <= gap_end:
-                reserved.append((gap_start, gap_end, 'RESERVED'))
-        
-        # Mark everything after last available range as RESERVED
-        if sorted_ranges[-1][1] < NUM_SLOTS - 1:
-            reserved.append((sorted_ranges[-1][1] + 1, NUM_SLOTS - 1, 'RESERVED'))
-        
-        counter_occupied[counter_id] = reserved
-    
-    # empty_counters is 1-indexed (counter names), convert to 0-indexed (counter IDs)
-    empty_counters = [8, 37, 36, 26, 16, 6, 35, 25, 15, 5, 34, 24, 14, 4, 33, 23, 13, 3, 32, 22, 12, 2, 31, 21, 11, 1]
-    empty_counters = [c - 1 for c in empty_counters]  # Convert to 0-indexed
-    # Filter out any counters that are already partial
-    empty_counters = [c for c in empty_counters if c not in partial_empty_rows]
-    # print(f"Available empty counters (0-indexed) after filtering: {empty_counters}")
-    # print(f"Available empty counters (display names): {['C' + str(c+1) for c in empty_counters]}")
-    # print(f"Partial counters: {list(partial_empty_rows.keys())}")
-    empty_idx = 0
-    
-    # Sort intervals by start time, then by end time
-    sorted_intervals = sorted(schedule_intervals_to_officers.items(), 
-                             key=lambda x: (x[0][0], x[0][1]))
-    
-    # Helper: check if interval can be placed in occupied list at a position
-    def can_place(occupied, interval):
-        """
-        Check if interval can fit without overlap.
-        Returns (can_fit: bool, insert_idx: int)
-        """
-        start, end = interval
-        
-        # Use only start times for binary search
-        occupied_starts = [s for s, e, _ in occupied]
-        idx = bisect_left(occupied_starts, start)
-        
-        # Check overlap with previous interval
-        if idx > 0:
-            prev_start, prev_end, _ = occupied[idx - 1]
-            # Inclusive intervals: [a,b] and [c,d] overlap if max(a,c) <= min(b,d)
-            if max(prev_start, start) <= min(prev_end, end):
-                return False, idx
-        
-        # Check overlap with next interval
-        if idx < len(occupied):
-            next_start, next_end, _ = occupied[idx]
-            if max(next_start, start) <= min(next_end, end):
-                return False, idx
-        
-        return True, idx
-    
-    for interval, officer_ids in sorted_intervals:
-        start, end = interval
-        
-        for officer_id in officer_ids:
-            best_counter = None
-            best_score = -1
-            best_insert_idx = -1
-            
-            # Step 1: try partial counters first (RESERVED blocks will prevent invalid placement)
-            for counter_id in partial_empty_rows.keys():
-                occupied = counter_occupied[counter_id]
-                can_fit, insert_idx = can_place(occupied, interval)
-                if can_fit:
-                    # Score: bonus for consecutive placement
-                    score = 50  # base bonus for partial counter
-                    if insert_idx > 0 and occupied[insert_idx-1][1] + 1 == start and occupied[insert_idx-1][2] != 'RESERVED':
-                        score += 100  # connects to previous (not RESERVED)
-                    if insert_idx < len(occupied) and end + 1 == occupied[insert_idx][0] and occupied[insert_idx][2] != 'RESERVED':
-                        score += 100  # connects to next (not RESERVED)
-                    
-                    if score > best_score:
-                        best_score = score
-                        best_counter = counter_id
-                        best_insert_idx = insert_idx
-            
-            # Step 2: try already used empty counters (gap allowed)
-            if best_counter is None:
-                for counter_id in list(counter_occupied.keys()):
-                    # Skip partial counters (already tried in step 1)
-                    if counter_id in partial_empty_rows:
-                        continue
-                    
-                    occupied = counter_occupied[counter_id]
-                    can_fit, insert_idx = can_place(occupied, interval)
-                    if can_fit:
-                        score = 10  # base score for reusing counter
-                        # bonus if connects to previous or next
-                        if insert_idx > 0 and occupied[insert_idx-1][1] + 1 == start:
-                            score += 100
-                        if insert_idx < len(occupied) and end + 1 == occupied[insert_idx][0]:
-                            score += 100
-                        
-                        if score > best_score:
-                            best_score = score
-                            best_counter = counter_id
-                            best_insert_idx = insert_idx
-            
-            # Step 3: use a new empty counter
-            if best_counter is None:
-                if empty_idx < len(empty_counters):
-                    best_counter = empty_counters[empty_idx]
-                    #print(f"  Assigning officer {officer_id} interval {interval} to NEW counter {best_counter} (C{best_counter+1})")
-                    counter_occupied[best_counter] = []  # Initialize this counter
-                    empty_idx += 1
-                    best_insert_idx = 0
-                else:
-                    #print(f"ERROR: No available counter for officer {officer_id}, interval {interval}")
-                    continue
-            
-            # Place officer in counter
-            counter_occupied[best_counter].insert(best_insert_idx, (start, end, officer_id))
-            # Fill the matrix (inclusive range)
-            counter_matrix[best_counter, start:end+1] = f"S{officer_id}"
-    
-    # Print statistics
-    used_counters = sum(1 for c in counter_occupied if any(o[2] != 'RESERVED' for o in counter_occupied[c]))
-    partial_used = sum(1 for c in partial_empty_rows if any(o[2] != 'RESERVED' for o in counter_occupied[c]))
-    new_empty_used = used_counters - partial_used
-    
-    print(f"\nAssignment Statistics:")
-    print(f"  Partial counters used: {partial_used}/{len(partial_empty_rows)}")
-    print(f"  New empty counters used: {new_empty_used}")
-    print(f"  Total counters used: {used_counters}/{NUM_COUNTERS}")
-    
-    # Print partial counter validation
-    #print(f"\nPartial Counter Validation:")
-    for counter_id, avail_ranges in partial_empty_rows.items():
-        assignments = [o for o in counter_occupied[counter_id] if o[2] != 'RESERVED']
-        #print(f"  Counter {counter_id}: available {avail_ranges}, assigned {len(assignments)} intervals")
-        for s, e, oid in assignments:
-            # Verify each assignment is within available ranges
-            in_range = any(s >= as_ and e <= ae for as_, ae in avail_ranges)
-            status = "✓" if in_range else "✗ VIOLATION"
-            #print(f"    ({s},{e}) officer {oid} {status}")
-            
-    
-    return counter_matrix
-
-import numpy as np
 
 def counter_to_officer_schedule(counter_matrix):
     """
@@ -1125,6 +925,7 @@ def counter_to_officer_schedule(counter_matrix):
     prefix_order = {'M': 0, 'S': 1, 'OT': 2}
 
     def sort_key(k):
+        k = str(k)
         if k.startswith('OT'):
             prefix = 'OT'
             num_part = k[2:]
@@ -1156,7 +957,8 @@ def plot_officer_timetable_with_labels(counter_matrix):
     Returns:
     - fig: Plotly Figure object
     """
-    counter_matrix = np.array(counter_matrix)
+    counter_matrix = np.array(counter_matrix, dtype=object)
+    counter_matrix[counter_matrix == 0] = '0'
     time_slots, num_counters = counter_matrix.shape  # (48, 41)
     
     # Create numeric matrix for colors
@@ -1168,6 +970,8 @@ def plot_officer_timetable_with_labels(counter_matrix):
                 color_matrix[i, j] = 1
             elif val.startswith('S'):
                 color_matrix[i, j] = 2
+            elif val.startswith('OT'):
+                color_matrix[i,j] = 3
             else:
                 color_matrix[i, j] = 0
     
@@ -1178,11 +982,13 @@ def plot_officer_timetable_with_labels(counter_matrix):
         x=[f'T{c}' for c in range(num_counters)],
         showscale=False,
         colorscale=[
-            [0, '#2E2C2C'],
-            [0.5, '#a2d2ff'],
-            [1, '#ffc6d9']
-        ]
-    )
+        [0, '#2E2C2C'],     # Unassigned
+        [0.33, '#a2d2ff'],  # M-type
+        [0.66, '#ffc6d9'],  # S-type
+        [1, '#FDFD96']      # OT-type
+        ],
+        zmin=0,
+        zmax=3)
     
     # Find merged regions (consecutive horizontal cells with same officer)
     annotations = []
@@ -1272,8 +1078,9 @@ def plot_officer_schedule_with_labels(officer_schedule):
 
     for i, officer_id in enumerate(officers):
         for t, counter in enumerate(officer_schedule[officer_id]):
+            officer_str = str(officer_id)
             if counter != 0:
-                color_matrix[i, t] = 1 if officer_id.startswith('M') else 2
+                color_matrix[i, t] = 1 if officer_str.startswith('M') else 2 if officer_str.startswith('S') else 3
                 label_matrix[i, t] = f'C{counter}'
             else:
                 color_matrix[i, t] = 0
@@ -1286,12 +1093,13 @@ def plot_officer_schedule_with_labels(officer_schedule):
         x=[f'T{t+1}' for t in range(num_slots)],
         showscale=False,
         colorscale=[
-            [0, '#2E2C2C'],     # Unassigned
-            [0.5, '#a2d2ff'],   # M-type
-            [1, '#ffc6d9']      # S-type
+        [0, '#2E2C2C'],     # Unassigned
+        [0.33, '#a2d2ff'],  # M-type
+        [0.66, '#ffc6d9'],  # S-type
+        [1, '#FDFD96']      # OT-type
         ],
         zmin=0,
-        zmax=2
+        zmax=3
     )
 
     annotations = []
@@ -1352,38 +1160,63 @@ def plot_officer_schedule_with_labels(officer_schedule):
 
     return fig
 
+import re
 import numpy as np
 
-def find_empty_rows(counter_matrix):
-    counter_matrix = np.array(counter_matrix)
-    empty_rows = []
-    partial_empty_rows = {}
+def add_takeover_ot_ctr(main_officers_schedule, handwritten_counters):
+    """
+    Reassigns index 0 and 1 of each officer's schedule based on handwritten_counters string.
 
-    for i, row in enumerate(counter_matrix):
-        zero_indices = np.where(row == 0)[0]
-        zero_indices = zero_indices.astype(int)  # convert to native int
-        if len(zero_indices) == 0:
-            continue  # no zeros, skip
-        if len(zero_indices) == len(row):
-            empty_rows.append(i)  # entire row is zero
-        else:
-            # find consecutive zero ranges
-            ranges = []
-            start = zero_indices[0]
-            for j in range(1, len(zero_indices)):
-                if zero_indices[j] != zero_indices[j-1] + 1:
-                    end = zero_indices[j-1]
-                    ranges.append((int(start), int(end)))
-                    start = zero_indices[j]
-            ranges.append((int(start), int(zero_indices[-1])))  # last range
-            partial_empty_rows[i] = ranges
-    partial_empty_rows_index = list({t for ranges in partial_empty_rows.values() for t in ranges})
-    # Optional: sort by first element for readability
-    partial_empty_rows_index.sort()
-    empty_rows.sort(key=lambda x: counter_priority_list.index(x + 1) if (x + 1) in counter_priority_list else float('inf'))
-    return empty_rows, partial_empty_rows, partial_empty_rows_index
+    Args:
+        main_officers_schedule (dict[int, np.ndarray]): {officer_id: schedule_array}
+        takeover_OT (str): e.g. "3AC12, 5AC13"
 
-def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers):
+    Returns:
+        dict[int, np.ndarray]: Updated schedule dictionary
+    """
+    # Copy to avoid modifying original
+    updated_schedule = {k: v.copy() for k, v in main_officers_schedule.items()}
+
+    if not handwritten_counters.strip():
+        return updated_schedule
+
+    # Find all officer-counter pairs using regex (handles spaces and lowercase)
+    pairs = re.findall(r'(\d+)\s*[aA]\s*[cC]\s*(\d+)', handwritten_counters)
+    print(pairs)
+    for officer_str, counter_str in pairs:
+        officer_key = f"M{officer_str}"  
+        new_counter = int(counter_str)
+        print(officer_key)
+        print(new_counter)
+
+        if officer_key in updated_schedule:
+            updated_schedule[officer_key][0:2] = updated_schedule[officer_key][0:2] = [new_counter, new_counter]
+
+    return updated_schedule
+
+import numpy as np
+
+def add_ot_counters(counter_matrix, OT_counters):
+    """
+    For each counter index in OT_counters, fill the first 2 columns of that row
+    with 'OT1', 'OT2', etc.
+    """
+    if len(OT_counters) == 0:
+        return counter_matrix
+    
+    counter_matrix_w_OT = counter_matrix.copy().astype(object)  # ensure mutable strings
+    OT_list = [int(x.strip()) for x in OT_counters.split(',') if x.strip()]
+    for i, OT_counter in enumerate(OT_list):
+        ot_id = f'OT{i+1}' # 0-index
+        counter_matrix_w_OT[OT_counter, 0:2] = [ot_id, ot_id]
+
+    counter_matrix_w_OT = counter_matrix_w_OT.astype(object)  # ensure object dtype is changed
+    counter_matrix_w_OT[counter_matrix_w_OT == 0] = '0'       # replace int 0 with '0'
+
+    return counter_matrix_w_OT
+
+
+def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers, handwritten_counters, OT_counters):
     main_officers_template = init_main_officers_template()
     main_officers_schedule, reported_officers, valid_ro_ra = generate_main_officers_schedule(main_officers_template, main_officers_reported, report_gl_counters, ro_ra_officers )
     counter_matrix_wo_last = officer_to_counter_matrix(main_officers_schedule)
@@ -1391,7 +1224,10 @@ def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_off
     reported_officers, valid_ro_ra, counter_matrix_wo_last)
     updated_main_officers_schedule = update_main_officers_schedule_last_counter(
         main_officers_schedule, officer_last_counter, empty_counters_2030)
-    counter_matrix = officer_to_counter_matrix(updated_main_officers_schedule)
+    updated_main_officers_schedule2 = add_takeover_ot_ctr(updated_main_officers_schedule, handwritten_counters)
+    counter_matrix = officer_to_counter_matrix(updated_main_officers_schedule2)
+    main_counter_matrix = prefix_non_zero(counter_matrix, "M")
+    main_counter_matrix_w_OT = add_ot_counters(counter_matrix, OT_counters)
     if len(sos_timings) >0:
         #counter_w_partial_availability = find_partial_availability(counter_matrix)
         officer_names, base_schedules = build_officer_schedules(sos_timings)
@@ -1400,19 +1236,35 @@ def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_off
             base_schedules,None,all_break_schedules,beam_width=20)
         print(min_penalty)
         sos_schedule_matrix = generate_sos_schedule_matrix(chosen_schedule_indices, all_break_schedules, officer_names)
+
         schedule_intervals_to_officers, schedule_intervals = get_intervals_from_schedule(sos_schedule_matrix)
-        chains = greedy_longest_partition_inclusive(schedule_intervals)
         print("=== best work count ===")
         print(best_work_count)
-        prefixed_counter_matrix = prefix_non_zero(counter_matrix, "M")
-        empty_rows, partial_empty_rows, partial_empty_rows_index = find_empty_rows(counter_matrix)
-        prefixed_sos_counter_manning = slot_officers_matrix_gap_aware(schedule_intervals_to_officers, partial_empty_rows)
-        final_counter_matrix = merge_prefixed_matrices(prefixed_counter_matrix, prefixed_sos_counter_manning)
+        print("===schedule_intervals_to_officers===")
+        print(schedule_intervals_to_officers)
+        print("===main_counter_matrix_w_OT===")
+        print(main_counter_matrix_w_OT)
+        sos_counter_matrix = add_sos_officers(schedule_intervals_to_officers, main_counter_matrix_w_OT)
+        print('+++++++++++++++++++++++++++++++++++++++++++++++===')
+        print(sos_counter_matrix)
+        final_counter_matrix = merge_prefixed_matrices(sos_counter_matrix, main_counter_matrix_w_OT)
         officer_schedule = counter_to_officer_schedule(final_counter_matrix)
         print(final_counter_matrix)
         print(final_counter_matrix.shape)
 
-        return final_counter_matrix, officer_schedule
+        return main_counter_matrix_w_OT, final_counter_matrix, officer_schedule
     else:
-        return counter_matrix, updated_main_officers_schedule
+        return main_counter_matrix_w_OT, main_counter_matrix_w_OT, updated_main_officers_schedule2
 # ================================================================
+
+if __name__ == "__main__":
+    # Default test inputs (same as Streamlit defaults)
+    main_officers_reported = "1-18"
+    report_gl_counters = "4AC1, 8AC11, 12AC21, 16AC31"
+    handwritten_counters = "3AC12,5AC13"
+    OT_counters = "2,20,40"
+    sos_timings = '1000-1300, 2000-2200, 1315-1430;2030-2200,1315-1430;2030-2200, 1000-1130;1315-1430;2030-2200, 1200-2200, 1400-1830, 1400-1830, 1630-1830,1330-2200,1800-2030, 1800-2030, 1730-2200, 1730-1900, 1700-1945'
+    ro_ra_officers = "3RO2100, 11RO1700,15RO2130"
+    print('hello')
+    results = run_algo(main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers, handwritten_counters, OT_counters)
+    print("Results:", results)
