@@ -1205,7 +1205,7 @@ def add_ot_counters(counter_matrix, OT_counters):
         return counter_matrix
     
     counter_matrix_w_OT = counter_matrix.copy().astype(object)  # ensure mutable strings
-    OT_list = [int(x.strip()) for x in OT_counters.split(',') if x.strip()]
+    OT_list = [int(x.strip()) for x in OT_counters.split(',') if x.strip()] #1 indexed
     for i, OT_counter in enumerate(OT_list):
         ot_id = f'OT{i+1}' # 0-index
         counter_matrix_w_OT[OT_counter, 0:2] = [ot_id, ot_id]
