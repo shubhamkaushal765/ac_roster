@@ -21,6 +21,12 @@ def hhmm_to_slot(hhmm: str) -> int:
         slot = (h - START_HOUR) * 4 + (m // 15)
         return max(0, min(NUM_SLOTS - 1, slot))
 
+def slot_to_hhmm(slot: int) -> str:
+    """Convert slot index back to hhmm string."""
+    h = START_HOUR + slot // 4
+    m = (slot % 4) * 15
+    return f"{h:02d}{m:02d}"
+
 # Initialize counters as a dict (keys 1–41)
 counters = {i: [0] * NUM_SLOTS for i in range(1, 42)}
 
@@ -413,15 +419,27 @@ def convert_input(user_input: str):
 
 def build_officer_schedules(user_input):
     """
-    Build (officer_names, base_schedules_matrix).
-    officer_names: list of officer IDs
-    base_schedules: 2D numpy array (num_officers, NUM_SLOTS)
+    Build (officer_names, base_schedules_matrix, pre_assigned_counter_dict)
+    
+    pre_assigned_counter_dict: {officer_index: counter_no}
     """
     input_avail = convert_input(user_input)
     officer_names = [f"O{i+1}" for i in range(len(input_avail))]
-    schedules = [parse_availability(avail) for avail in input_avail]
+    schedules = []
+    pre_assigned_counter_dict = {}
+
+    for idx, avail in enumerate(input_avail):
+        # Search for pre-assigned counters like (AC4)
+        matches = re.findall(r"\(AC(\d+)\)", avail, flags=re.IGNORECASE)
+        if matches:
+            # Take the first pre-assigned counter found for this officer
+            pre_assigned_counter_dict[idx] = int(matches[0])
+            # Remove the (ACx) part from the string before parsing slots
+            avail = re.sub(r"\(AC\d+\)", "", avail, flags=re.IGNORECASE)
+        schedules.append(parse_availability(avail))
+    
     base_schedules = np.vstack(schedules)
-    return officer_names, base_schedules
+    return officer_names, base_schedules, pre_assigned_counter_dict
 
 def generate_break_schedules(base_schedules, officer_names):
     def sliding_window_ok(schedule):
@@ -752,7 +770,7 @@ def prefix_non_zero(counter_matrix, prefix):
     
     return result
 
-def add_sos_officers(schedule_intervals_to_officers, main_counter_matrix):
+def add_sos_officers(pre_assigned_counter_dict, schedule_intervals_to_officers, main_counter_matrix):
     """
     Assign officers to counters using gap-aware greedy interval packing.
 
@@ -816,6 +834,8 @@ def add_sos_officers(schedule_intervals_to_officers, main_counter_matrix):
                 used_counters.append(counter_id)
         return used_counters
     
+    print('++++++++++++++++++++sorted intervals++++++')
+    print(sorted_intervals)
     for interval, officer_ids in sorted_intervals:
         start, end = interval
         
@@ -823,18 +843,23 @@ def add_sos_officers(schedule_intervals_to_officers, main_counter_matrix):
             best_counter = None
             best_score = -1
             
+            #Step 0: check if first counter is already pre-assigned
+            if len(pre_assigned_counter_dict) > 0 and  officer_id in pre_assigned_counter_dict and start == 0:
+                best_counter = pre_assigned_counter_dict[officer_id]
+
             # Get current partial counters
             partial_counters = get_partial_empty_counters()
             
             # Step 1: try partial counters first (must be CONNECTED to previous or next)
-            for counter_id in partial_counters:
-                if is_interval_empty(counter_id, start, end):
-                    if is_connected(counter_id, start, end):
-                        score = 100  # Connected to existing assignment
-                        if score > best_score:
-                            best_score = score
-                            best_counter = counter_id
-            
+            if best_counter is None:
+                for counter_id in partial_counters:
+                    if is_interval_empty(counter_id, start, end):
+                        if is_connected(counter_id, start, end):
+                            score = 100  # Connected to existing assignment
+                            if score > best_score:
+                                best_score = score
+                                best_counter = counter_id
+                
             # Step 2: try already used SOS counters (must be CONNECTED)
             if best_counter is None:
                 used_sos_counters = get_used_sos_counters(partial_counters)
@@ -858,8 +883,8 @@ def add_sos_officers(schedule_intervals_to_officers, main_counter_matrix):
                     continue
             
             # Assign officer to counter
-            sos_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id}"
-            sos_main_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id}"
+            sos_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id+1}"
+            sos_main_counter_matrix[best_counter - 1, start:end+1] = f"S{officer_id+1}"
     
     # Print statistics
     final_partial = get_partial_empty_counters()
@@ -1215,6 +1240,38 @@ def add_ot_counters(counter_matrix, OT_counters):
 
     return counter_matrix_w_OT
 
+def generate_statistics(counter_matrix: np.ndarray):
+    statistics_list = []
+    counter_matrix = np.array(counter_matrix)  # ensure numpy array
+    num_rows, num_slots = counter_matrix.shape
+
+    # define row groups for second line
+    row_groups = [range(0, 10), range(10, 20), range(20, 30), range(30, 40)]
+
+    for slot in range(num_slots):
+        # First line: sum of rows 0-39 not '0' + '/' + sum of remaining rows not '0'
+        count1 = np.sum(counter_matrix[0:40, slot] != '0')
+        count2 = np.sum(counter_matrix[40:, slot] != '0')
+        first_line = f"{slot_to_hhmm(slot)}: "
+        first_line2 = f"{count1:02d}/{count2:02d}"
+
+        # Second line: sum per row group
+        group_counts = []
+        for g in row_groups:
+            group_counts.append(str(np.sum(counter_matrix[g, slot] != '0')))
+        second_line = '/'.join(group_counts)
+
+        statistics_list.append((first_line, first_line2, second_line))
+    stats = []
+    for i,t in enumerate(statistics_list):
+        if i%4 == 0:
+            stats.append(t)
+        elif i%2 == 0 and t[2]!=stats[-1][2]:
+            stats.append(t)
+    output_text = ""
+    for stat in stats:
+        output_text += f"{stat[0]}{stat[1]}\n{stat[2]}\n\n"
+    return output_text
 
 def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers, handwritten_counters, OT_counters):
     main_officers_template = init_main_officers_template()
@@ -1226,17 +1283,17 @@ def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_off
         main_officers_schedule, officer_last_counter, empty_counters_2030)
     updated_main_officers_schedule2 = add_takeover_ot_ctr(updated_main_officers_schedule, handwritten_counters)
     counter_matrix = officer_to_counter_matrix(updated_main_officers_schedule2)
-    main_counter_matrix = prefix_non_zero(counter_matrix, "M")
     main_counter_matrix_w_OT = add_ot_counters(counter_matrix, OT_counters)
+    stats1 = generate_statistics(main_counter_matrix_w_OT)
     if len(sos_timings) >0:
         #counter_w_partial_availability = find_partial_availability(counter_matrix)
-        officer_names, base_schedules = build_officer_schedules(sos_timings)
+        officer_names, base_schedules, pre_assigned_counter_dict = build_officer_schedules(sos_timings)
+        print(pre_assigned_counter_dict)
         all_break_schedules = generate_break_schedules(base_schedules, officer_names)
         chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
             base_schedules,None,all_break_schedules,beam_width=20)
         print(min_penalty)
         sos_schedule_matrix = generate_sos_schedule_matrix(chosen_schedule_indices, all_break_schedules, officer_names)
-
         schedule_intervals_to_officers, schedule_intervals = get_intervals_from_schedule(sos_schedule_matrix)
         print("=== best work count ===")
         print(best_work_count)
@@ -1244,17 +1301,17 @@ def run_algo (main_officers_reported, report_gl_counters, sos_timings, ro_ra_off
         print(schedule_intervals_to_officers)
         print("===main_counter_matrix_w_OT===")
         print(main_counter_matrix_w_OT)
-        sos_counter_matrix = add_sos_officers(schedule_intervals_to_officers, main_counter_matrix_w_OT)
+        sos_counter_matrix = add_sos_officers(pre_assigned_counter_dict,schedule_intervals_to_officers, main_counter_matrix_w_OT)
         print('+++++++++++++++++++++++++++++++++++++++++++++++===')
         print(sos_counter_matrix)
         final_counter_matrix = merge_prefixed_matrices(sos_counter_matrix, main_counter_matrix_w_OT)
         officer_schedule = counter_to_officer_schedule(final_counter_matrix)
         print(final_counter_matrix)
         print(final_counter_matrix.shape)
-
-        return main_counter_matrix_w_OT, final_counter_matrix, officer_schedule
+        stats2 = generate_statistics(final_counter_matrix)
+        return main_counter_matrix_w_OT, final_counter_matrix, officer_schedule, [stats1, stats2]
     else:
-        return main_counter_matrix_w_OT, main_counter_matrix_w_OT, updated_main_officers_schedule2
+        return main_counter_matrix_w_OT, main_counter_matrix_w_OT, updated_main_officers_schedule2, [stats1, stats1]
 # ================================================================
 
 if __name__ == "__main__":
@@ -1263,8 +1320,7 @@ if __name__ == "__main__":
     report_gl_counters = "4AC1, 8AC11, 12AC21, 16AC31"
     handwritten_counters = "3AC12,5AC13"
     OT_counters = "2,20,40"
-    sos_timings = '1000-1300, 2000-2200, 1315-1430;2030-2200,1315-1430;2030-2200, 1000-1130;1315-1430;2030-2200, 1200-2200, 1400-1830, 1400-1830, 1630-1830,1330-2200,1800-2030, 1800-2030, 1730-2200, 1730-1900, 1700-1945'
+    sos_timings = '(AC22)1000-1300, 2000-2200, 1315-1430;2030-2200,1315-1430;2030-2200, (AC23)1000-1130;1315-1430;2030-2200, 1200-2200, 1400-1830, 1400-1830, 1630-1830,1330-2200,1800-2030, 1800-2030, 1730-2200, 1730-1900, 1700-1945'
     ro_ra_officers = "3RO2100, 11RO1700,15RO2130"
-    print('hello')
     results = run_algo(main_officers_reported, report_gl_counters, sos_timings, ro_ra_officers, handwritten_counters, OT_counters)
-    print("Results:", results)
+    print("Results:", results[-1][0])
