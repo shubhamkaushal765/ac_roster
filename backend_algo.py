@@ -1268,7 +1268,7 @@ def generate_statistics(counter_matrix: np.ndarray):
             stats.append(t)
         elif i%2 == 0 and t[2]!=stats[-1][2]:
             stats.append(t)
-    output_text = ""
+    output_text = "ACar"
     for stat in stats:
         output_text += f"{stat[0]}{stat[1]}\n{stat[2]}\n\n"
     return output_text

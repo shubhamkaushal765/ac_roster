@@ -4,8 +4,12 @@ from backend_algo import run_algo, plot_officer_timetable_with_labels, plot_offi
 # === Streamlit setup ===
 st.set_page_config(page_title="AC roster Morning", layout="wide")
 st.title("Generate AC roster (Morning)")
-
+st.markdown(
+    "<p style='font-size:14px; color:gray; margin-top:-10px;'>💡 For better display on mobile, please enable <b>Desktop site</b> in your browser settings.</p>",
+    unsafe_allow_html=True
+)
 instructions = """
+
 <h3>How to input SOS timings</h3>
 
 1. Different officers are separated by commas `,`.
@@ -30,7 +34,18 @@ instructions = """
 
 """
 
-st.markdown(f"<div style='background-color:#f0f0f0; border:1px solid #000; padding:10px'>{instructions}</div>", unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div style="
+        border: 1px solid white;
+        border-radius: 8px;
+        padding: 10px;
+    ">
+        {instructions}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # === User Inputs ===
 main_officers_reported = st.text_input("Main Officers Reported", value="1-18")
