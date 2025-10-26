@@ -67,6 +67,7 @@ dependencies = [
     "webencodings==0.5.1",
     "wheel==0.45.1",
     "yarg>=0.1.9",
+    "pre-commit>=4.3.0",
 ]
 
 [build-system]
