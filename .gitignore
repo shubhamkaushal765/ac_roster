@@ -1,3 +1,6 @@
 .venv/
 .idea/
 *.egg-info
+
+__pycache__/
+__*
