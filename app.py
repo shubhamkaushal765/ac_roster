@@ -74,7 +74,7 @@ if st.button("Generate Schedule"):
             "⚠️ 'Main Officers Reported' is a required field. Please enter a value before submitting."
         )
     else:
-        # Run the ac_roster algorithm only when input is valid
+        # Run the acroster algorithm only when input is valid
         counter_matrix, final_counter_matrix, officer_schedule, output_text = run_algo(
             main_officers_reported,
             report_gl_counters,

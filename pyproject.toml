@@ -1,5 +1,5 @@
 [project]
-name = "ac_roster"
+name = "acroster"
 version = "0.1.0"
 description = "Shift Optimizer for Officers"
 readme = "README.md"
@@ -71,7 +71,7 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = ["ac_roster"]
+packages = ["acroster"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
