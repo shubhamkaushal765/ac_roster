@@ -1157,7 +1157,6 @@ def counter_to_officer_schedule(counter_matrix):
 
     return sorted_schedule  # sorted officer schedule
 
-
 def plot_officer_timetable_with_labels(counter_matrix):
     """
     Plots an interactive timetable with officer IDs inside each cell.
@@ -1189,11 +1188,21 @@ def plot_officer_timetable_with_labels(counter_matrix):
             else:
                 color_matrix[i, j] = 0
 
-    # Create heatmap
+    # === Generate x-axis labels using slot_to_hhmm ===
+    x_labels = [slot_to_hhmm(t) for t in range(num_counters)]
+
+    # Create heatmap with proper hover text
+    hover_text = [
+        [f"Time: {x_labels[j]}<br>Counter: C{i+1}<br>Officer: {counter_matrix[i, j]}" for j in range(num_counters)]
+        for i in range(time_slots)
+    ]
+
     heatmap = go.Heatmap(
         z=color_matrix,
         y=[f"C{t + 1}" for t in range(time_slots)],
-        x=[f"T{c}" for c in range(num_counters)],
+        x=x_labels,
+        text=hover_text,
+        hoverinfo="text",
         showscale=False,
         colorscale=[
             [0, "#2E2C2C"],  # Unassigned
@@ -1203,6 +1212,7 @@ def plot_officer_timetable_with_labels(counter_matrix):
         ],
         zmin=0,
         zmax=3,
+        opacity =0.85
     )
 
     # Find merged regions (consecutive horizontal cells with same officer)
@@ -1247,12 +1257,12 @@ def plot_officer_timetable_with_labels(counter_matrix):
                 j = j_end
             else:
                 j += 1
-
+    
     # Create figure
     fig = go.Figure(data=[heatmap])
     fig.update_layout(
         title="Officer Timetable",
-        xaxis_title="Time Slot",
+        xaxis_title="Time",
         yaxis_title="Counter",
         width=900,
         height=1000,
@@ -1261,11 +1271,49 @@ def plot_officer_timetable_with_labels(counter_matrix):
         yaxis_autorange="reversed",
         dragmode=False,
     )
+
+    # Show ticks only every few slots for readability (e.g. every 2 slots = 30 mins)
+    fig.update_xaxes(tickvals=list(range(0, num_counters, 4)), ticktext=[x_labels[i] for i in range(0, num_counters, 4)])
+    fig.update_xaxes(showgrid=False, showticklabels=True, zeroline=False)
+    fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
+
+
+        # === Add graph-paper style grid lines ===
+    grid_shapes = []
+    for x in range(num_counters + 1):
+        # Every 4 slots → thick solid line
+        if x % 4 == 0:
+            grid_shapes.append(
+                dict(
+                    type="line",
+                    x0=x - 0.5,
+                    x1=x - 0.5,
+                    y0=-0.5,
+                    y1=time_slots - 0.5,
+                    line=dict(color="rgba(0,0,0,0.5)", width=1),
+                    layer = 'below'
+                )
+            )
+        # Every 2 slots → dashed line
+        elif x % 2 == 0:
+            grid_shapes.append(
+                dict(
+                    type="line",
+                    x0=x - 0.5,
+                    x1=x - 0.5,
+                    y0=-0.5,
+                    y1=time_slots - 0.5,
+                    line=dict(color="rgba(0,0,0,0.2)", width=3, dash="longdash"),
+                    layer = 'below'
+                )
+            )
+
+    # Add the shapes to the figure
+    fig.update_layout(shapes=fig.layout.shapes + tuple(grid_shapes))
+
+    
     return fig
 
-
-# Assuming your matrix is called `merged`
-# plot_officer_timetable_with_labels(merged)
 
 
 def plot_officer_schedule_with_labels(officer_schedule):
@@ -1321,6 +1369,7 @@ def plot_officer_schedule_with_labels(officer_schedule):
         ],
         zmin=0,
         zmax=3,
+        opacity= 0.85
     )
 
     annotations = []
@@ -1380,6 +1429,42 @@ def plot_officer_schedule_with_labels(officer_schedule):
         yaxis_autorange="reversed",
         dragmode=False,
     )
+    fig.update_xaxes(showgrid=False, showticklabels=True, zeroline=False)
+    fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
+
+
+        # === Add graph-paper style grid lines ===
+    grid_shapes = []
+    for x in range(num_slots + 1):
+        # Every 4 slots → thick solid line
+        if x % 4 == 0:
+            grid_shapes.append(
+                dict(
+                    type="line",
+                    x0=x - 0.5,
+                    x1=x - 0.5,
+                    y0=-0.5,
+                    y1=num_officers - 0.5,
+                    line=dict(color="rgba(0,0,0,0.5)", width=1),
+                    layer = 'below'
+                )
+            )
+        # Every 2 slots → dashed line
+        elif x % 2 == 0:
+            grid_shapes.append(
+                dict(
+                    type="line",
+                    x0=x - 0.5,
+                    x1=x - 0.5,
+                    y0=-0.5,
+                    y1=num_officers - 0.5,
+                    line=dict(color="rgba(0,0,0,0.2)", width=3, dash="longdash"),
+                    layer = 'below'
+                )
+            )
+
+    # Add the shapes to the figure
+    fig.update_layout(shapes=fig.layout.shapes + tuple(grid_shapes))
 
     return fig
 
@@ -1580,3 +1665,12 @@ if __name__ == "__main__":
         OT_counters,
     )
     print("Results:", results[-1][0])
+    # === Show plots ===
+    fig1 = plot_officer_timetable_with_labels(results[0])
+    fig2 = plot_officer_timetable_with_labels(results[1])
+    fig3 = plot_officer_schedule_with_labels(results[2])
+
+    # explicitly show them (works in script mode)
+    fig1.show()
+    fig2.show()
+    fig3.show()
