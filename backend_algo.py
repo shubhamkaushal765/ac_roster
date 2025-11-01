@@ -1200,7 +1200,7 @@ def plot_officer_timetable_with_labels(counter_matrix):
     heatmap = go.Heatmap(
         z=color_matrix,
         y=[f"C{t + 1}" for t in range(time_slots)],
-        x=x_labels,
+        x=list(range(num_counters)),
         text=hover_text,
         hoverinfo="text",
         showscale=False,
@@ -1212,7 +1212,7 @@ def plot_officer_timetable_with_labels(counter_matrix):
         ],
         zmin=0,
         zmax=3,
-        opacity =0.85
+        opacity=0.85
     )
 
     # Find merged regions (consecutive horizontal cells with same officer)
@@ -1258,62 +1258,75 @@ def plot_officer_timetable_with_labels(counter_matrix):
             else:
                 j += 1
     
+    # === Add graph-paper style grid lines ONLY in unassigned cells ===
+    grid_shapes = []
+    for x in range(num_counters + 1):
+        # Check each row segment to see if we should draw the line
+        for i in range(time_slots):
+            # Determine if this segment should have a grid line
+            # Only draw if both adjacent cells (or edge) are unassigned
+            left_unassigned = (x == 0) or (x > 0 and color_matrix[i, x-1] == 0)
+            right_unassigned = (x == num_counters) or (x < num_counters and color_matrix[i, x] == 0)
+            
+            if left_unassigned and right_unassigned:
+                # Every 4 slots → thick solid line
+                if x % 4 == 0:
+                    grid_shapes.append(
+                        dict(
+                            type="line",
+                            x0=x - 0.5,
+                            x1=x - 0.5,
+                            y0=i - 0.5,
+                            y1=i + 0.5,
+                            line=dict(color="rgba(150,150,150,0.6)", width=1),
+                            layer='above'
+                        )
+                    )
+                # Every 2 slots → dashed line
+                elif x % 2 == 0:
+                    grid_shapes.append(
+                        dict(
+                            type="line",
+                            x0=x - 0.5,
+                            x1=x - 0.5,
+                            y0=i - 0.5,
+                            y1=i + 0.5,
+                            line=dict(color="rgba(120,120,120,0.4)", width=2, dash="dash"),
+                            layer='above'
+                        )
+                    )
+
+    # Combine all shapes
+    all_shapes = shapes + grid_shapes
+    
     # Create figure
     fig = go.Figure(data=[heatmap])
     fig.update_layout(
         title="Officer Timetable",
         xaxis_title="Time",
         yaxis_title="Counter",
-        width=900,
-        height=1000,
         annotations=annotations,
-        shapes=shapes,
+        shapes=all_shapes,
         yaxis_autorange="reversed",
         dragmode=False,
+        autosize=True,
+        height=900,
+        width=900
     )
-
-    # Show ticks only every few slots for readability (e.g. every 2 slots = 30 mins)
-    fig.update_xaxes(tickvals=list(range(0, num_counters, 4)), ticktext=[x_labels[i] for i in range(0, num_counters, 4)])
-    fig.update_xaxes(showgrid=False, showticklabels=True, zeroline=False)
+    
+    # Show ticks with time labels
+    fig.update_xaxes(
+        tickvals=list(range(0, num_counters, 4)), 
+        ticktext=[x_labels[i] for i in range(0, num_counters, 4)],
+        showgrid=False, 
+        showticklabels=True, 
+        zeroline=False,
+        type='linear',
+        ticks = ''
+    )
     fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
-
-
-        # === Add graph-paper style grid lines ===
-    grid_shapes = []
-    for x in range(num_counters + 1):
-        # Every 4 slots → thick solid line
-        if x % 4 == 0:
-            grid_shapes.append(
-                dict(
-                    type="line",
-                    x0=x - 0.5,
-                    x1=x - 0.5,
-                    y0=-0.5,
-                    y1=time_slots - 0.5,
-                    line=dict(color="rgba(0,0,0,0.5)", width=1),
-                    layer = 'below'
-                )
-            )
-        # Every 2 slots → dashed line
-        elif x % 2 == 0:
-            grid_shapes.append(
-                dict(
-                    type="line",
-                    x0=x - 0.5,
-                    x1=x - 0.5,
-                    y0=-0.5,
-                    y1=time_slots - 0.5,
-                    line=dict(color="rgba(0,0,0,0.2)", width=3, dash="longdash"),
-                    layer = 'below'
-                )
-            )
-
-    # Add the shapes to the figure
-    fig.update_layout(shapes=fig.layout.shapes + tuple(grid_shapes))
-
     
     return fig
-
 
 
 def plot_officer_schedule_with_labels(officer_schedule):
@@ -1355,11 +1368,14 @@ def plot_officer_schedule_with_labels(officer_schedule):
                 color_matrix[i, t] = 0
                 label_matrix[i, t] = ""
 
-    # Base heatmap
+    # Generate x-axis labels using slot_to_hhmm
+    x_labels = [slot_to_hhmm(t) for t in range(num_slots)]
+
+    # Base heatmap with numeric x-axis
     heatmap = go.Heatmap(
         z=color_matrix,
         y=officers,
-        x=[f"T{t + 1}" for t in range(num_slots)],
+        x=list(range(num_slots)),  # Use numeric values
         showscale=False,
         colorscale=[
             [0, "#2E2C2C"],  # Unassigned
@@ -1369,7 +1385,7 @@ def plot_officer_schedule_with_labels(officer_schedule):
         ],
         zmin=0,
         zmax=3,
-        opacity= 0.85
+        opacity=0.85
     )
 
     annotations = []
@@ -1416,58 +1432,75 @@ def plot_officer_schedule_with_labels(officer_schedule):
             else:
                 t += 1
 
+    # === Add graph-paper style grid lines ONLY in unassigned cells ===
+    grid_shapes = []
+    for x in range(num_slots + 1):
+        # Check each officer segment to see if we should draw the line
+        for i in range(num_officers):
+            # Determine if this segment should have a grid line
+            # Only draw if both adjacent cells (or edge) are unassigned
+            left_unassigned = (x == 0) or (x > 0 and color_matrix[i, x-1] == 0)
+            right_unassigned = (x == num_slots) or (x < num_slots and color_matrix[i, x] == 0)
+            
+            if left_unassigned and right_unassigned:
+                # Every 4 slots → thick solid line
+                if x % 4 == 0:
+                    grid_shapes.append(
+                        dict(
+                            type="line",
+                            x0=x - 0.5,
+                            x1=x - 0.5,
+                            y0=i - 0.5,
+                            y1=i + 0.5,
+                            line=dict(color="rgba(150,150,150,0.6)", width=1),
+                            layer='above'
+                        )
+                    )
+                # Every 2 slots → dashed line
+                elif x % 2 == 0:
+                    grid_shapes.append(
+                        dict(
+                            type="line",
+                            x0=x - 0.5,
+                            x1=x - 0.5,
+                            y0=i - 0.5,
+                            y1=i + 0.5,
+                            line=dict(color="rgba(120,120,120,0.4)", width=2, dash="dash"),
+                            layer='above'
+                        )
+                    )
+
+    # Combine all shapes
+    all_shapes = shapes + grid_shapes
+
     # Build figure
     fig = go.Figure(data=[heatmap])
     fig.update_layout(
         title="Officer Timetable (Counter Assignments)",
-        xaxis_title="Time Slot",
+        xaxis_title="Time",
         yaxis_title="Officer",
-        width=900,
-        height=900,
         annotations=annotations,
-        shapes=shapes,
+        shapes=all_shapes,
         yaxis_autorange="reversed",
         dragmode=False,
+        autosize=True,
+        height=900,
+        width=900
     )
-    fig.update_xaxes(showgrid=False, showticklabels=True, zeroline=False)
+    
+    # Show ticks with time labels
+    fig.update_xaxes(
+        tickvals=list(range(0, num_slots, 4)), 
+        ticktext=[x_labels[i] for i in range(0, num_slots, 4)],
+        showgrid=False, 
+        showticklabels=True, 
+        zeroline=False,
+        type='linear',
+        ticks = ''
+    )
     fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
 
-
-        # === Add graph-paper style grid lines ===
-    grid_shapes = []
-    for x in range(num_slots + 1):
-        # Every 4 slots → thick solid line
-        if x % 4 == 0:
-            grid_shapes.append(
-                dict(
-                    type="line",
-                    x0=x - 0.5,
-                    x1=x - 0.5,
-                    y0=-0.5,
-                    y1=num_officers - 0.5,
-                    line=dict(color="rgba(0,0,0,0.5)", width=1),
-                    layer = 'below'
-                )
-            )
-        # Every 2 slots → dashed line
-        elif x % 2 == 0:
-            grid_shapes.append(
-                dict(
-                    type="line",
-                    x0=x - 0.5,
-                    x1=x - 0.5,
-                    y0=-0.5,
-                    y1=num_officers - 0.5,
-                    line=dict(color="rgba(0,0,0,0.2)", width=3, dash="longdash"),
-                    layer = 'below'
-                )
-            )
-
-    # Add the shapes to the figure
-    fig.update_layout(shapes=fig.layout.shapes + tuple(grid_shapes))
-
     return fig
-
 
 def add_takeover_ot_ctr(main_officers_schedule, handwritten_counters):
     """
