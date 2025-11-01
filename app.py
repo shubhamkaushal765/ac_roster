@@ -53,7 +53,6 @@ st.markdown(
 
 # === User Inputs ===
 st.markdown("<br>", unsafe_allow_html=True)
-
 main_officers_reported = st.text_input("Main Officers Reported", value="1-18")
 report_gl_counters = st.text_input("GL Counters", value="4AC1, 8AC11, 12AC21, 16AC31")
 handwritten_counters = st.text_input(
