@@ -364,7 +364,7 @@ flowchart TD
 ### Quick Start
 
 ```python
-from backend import SchedulingEngine
+from ac_roster import SchedulingEngine
 
 # Initialize the engine
 engine = SchedulingEngine()
@@ -379,12 +379,12 @@ overtime = "2,20,40"  # Counters 2, 20, and 40 are overtime
 
 # Run the scheduling algorithm
 main_matrix, final_matrix, officer_schedule, stats = engine.run(
-    main_officers,
-    counter_assignments,
-    sos_timings,
-    adjustments,
-    handwritten,
-    overtime
+  main_officers,
+  counter_assignments,
+  sos_timings,
+  adjustments,
+  handwritten,
+  overtime
 )
 
 # View results
@@ -467,18 +467,18 @@ uv pip install
 ### Example 1: Basic Schedule
 
 ```python
-from backend import SchedulingEngine
+from ac_roster import SchedulingEngine
 
 engine = SchedulingEngine()
 
 # Simple scenario: 10 officers, no special conditions
 results = engine.run(
-    main_officers_reported="1-10",
-    report_gl_counters="",
-    sos_timings="",
-    ro_ra_officers="",
-    handwritten_counters="",
-    ot_counters=""
+  main_officers_reported="1-10",
+  report_gl_counters="",
+  sos_timings="",
+  ro_ra_officers="",
+  handwritten_counters="",
+  ot_counters=""
 )
 
 main_matrix, final_matrix, officer_schedule, stats = results
@@ -506,7 +506,7 @@ main_matrix, final_matrix, officer_schedule, stats = results
 ### Example 3: Visualize Schedule
 
 ```python
-from backend import ScheduleVisualizer
+from ac_roster import ScheduleVisualizer
 
 # After getting officer_schedule from engine.run()
 fig = ScheduleVisualizer.plot_officer_timetable(officer_schedule)
@@ -516,7 +516,7 @@ fig.show()  # Opens interactive plot in browser
 ### Example 4: Get Statistics
 
 ```python
-from backend import StatisticsGenerator
+from ac_roster import StatisticsGenerator
 
 # After getting counter_matrix
 stats_text = StatisticsGenerator.generate(counter_matrix)
@@ -654,7 +654,7 @@ class MainOfficerScheduler:
 ### Validate Inputs
 
 ```python
-from backend import InputParser
+from ac_roster import InputParser
 
 # Test input parsing separately
 officers = InputParser.parse_officer_range("1-5, 10")
