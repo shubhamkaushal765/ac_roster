@@ -2,6 +2,8 @@ import re
 from collections import defaultdict
 from copy import deepcopy
 from acroster import Plotter
+from acroster import Officer, MainOfficer, OTOfficer, SOSOfficer
+from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 
@@ -94,7 +96,9 @@ def add_4main_roster(full_counters):
     return (a, b, c, d)
 
 
-def init_main_officers_template(main_total=24, exclude_main: list = None):
+def init_main_officers_template(main_total=24, exclude_main: list = None) -> \
+        Dict[int, np.ndarray]:
+    """Generate roster templates for main officers (unchanged, just returns templates)"""
     main_officers = {}
     main_officers[1] = (
             [41] * 6
@@ -203,20 +207,25 @@ def init_main_officers_template(main_total=24, exclude_main: list = None):
         for i, officer in enumerate(m_no):
             main_officers[officer] = results[i]
 
-    main_officers = {f"M{i}": np.array(v) for i, v in main_officers.items()}
+    # Convert to numpy arrays
+    main_officers = {i: np.array(v) for i, v in main_officers.items()}
     return main_officers
 
 
-# main_officers_template = init_main_officers_template()
-# main_officers_template
-
-
 def generate_main_officers_schedule(
-        main_officers_template,
-        main_officers_reported,
-        report_gl_counters,
-        main_officers_report_late_or_leave_early,
-):
+        main_officers_template: Dict[int, np.ndarray],
+        main_officers_reported: str,
+        report_gl_counters: str,
+        main_officers_report_late_or_leave_early: str,
+) -> Tuple[Dict[str, MainOfficer], set, List[Tuple]]:
+    """
+    Generate MainOfficer objects with schedules
+
+    Returns:
+        - Dict of MainOfficer objects keyed by officer_key (e.g., 'M1')
+        - Set of reported officer IDs
+        - List of valid adjustments
+    """
     # Parse which officers reported
     reported_officers = set()
     parts = main_officers_reported.split(",")
@@ -229,11 +238,11 @@ def generate_main_officers_schedule(
         else:
             reported_officers.add(int(part))
 
-    # --- Validation function (skip invalids) ---
+    # Validation function
     def validate_adjustments(input_str):
         valid_entries = []
         if not input_str.strip():
-            return valid_entries  # no adjustments
+            return valid_entries
 
         entries = input_str.split(",")
         for entry in entries:
@@ -241,12 +250,10 @@ def generate_main_officers_schedule(
             if not entry:
                 continue
 
-            # Must match officer_id + RA/RO + 4 digits
             if not re.match(r"^\d+(RA|RO)\d{4}$", entry):
                 print(f"⚠️ Skipping {entry}: invalid format")
                 continue
 
-            # Extract parts
             if "RA" in entry:
                 idx = entry.index("RA")
                 officer_id = int(entry[:idx])
@@ -258,14 +265,12 @@ def generate_main_officers_schedule(
                 hhmm = entry[idx + 2:]
                 adj_type = "RO"
 
-            # Officer must be in reported_officers
             if officer_id not in reported_officers:
                 print(
                     f"⚠️ Skipping {entry}: officer {officer_id} not in reported list."
                 )
                 continue
 
-            # Validate HHMM
             h = int(hhmm[:2])
             m = int(hhmm[2:])
             if not (10 <= h <= 22):
@@ -294,74 +299,68 @@ def generate_main_officers_schedule(
         slot = hhmm_to_slot(hhmm)
         adjustments[officer_id] = (adj_type, slot)
 
-    # Build the schedule
-    main_officers_schedule = {}
+    # Build MainOfficer objects
+    main_officers: Dict[str, MainOfficer] = {}
     for officer_id in reported_officers:
-        officer_key = f"M{officer_id}"
-        if officer_key not in main_officers_template:
+        if officer_id not in main_officers_template:
             continue
 
-        schedule = main_officers_template[officer_key].copy()
+        # Create MainOfficer with template
+        officer = MainOfficer(
+            officer_id=officer_id,
+            roster_template=main_officers_template[officer_id]
+        )
 
+        # Apply late arrival or early departure
         if officer_id in adjustments:
             adjustment_type, slot = adjustments[officer_id]
             if adjustment_type == "RA":
-                schedule[:slot] = 0
+                officer.apply_late_arrival(slot)
             elif adjustment_type == "RO":
-                schedule[slot:] = 0
-        main_officers_schedule[officer_key] = schedule
+                officer.apply_early_departure(slot)
 
-    report_list = [s.strip() for s in report_gl_counters.split(",")]
+        main_officers[officer.officer_key] = officer
 
+    # Apply ground level counters
+    report_list = [s.strip() for s in report_gl_counters.split(",") if
+                   s.strip()]
     for officer_counter in report_list:
         if "AC" in officer_counter:
             idx = officer_counter.index("AC")
             officer_id = int(officer_counter[:idx])
             counter_no = int(officer_counter[idx + 2:])
 
-            # Only apply to officers divisible by 4
-            if officer_id % 4 == 0:
-                officer_key = "M" + str(officer_id)
-                if officer_key in main_officers_schedule:
-                    # Assign counter_no to slots 0 to 4 inclusive
-                    for slot in range(0, 5):
-                        main_officers_schedule[officer_key][slot] = counter_no
+            officer_key = f"M{officer_id}"
+            if officer_key in main_officers:
+                main_officers[officer_key].apply_ground_level_counter(
+                    counter_no
+                )
 
-    return main_officers_schedule, reported_officers, valid_adjustments
+    return main_officers, reported_officers, valid_adjustments
 
 
 def get_officer_last_counter_and_empty_counters(
-        reported_officers, ro_ra_officers, counter_matrix
-):
+        reported_officers: set,
+        ro_ra_officers: List[Tuple],
+        counter_matrix: np.ndarray
+) -> Tuple[Dict[int, int], List[int]]:
     """
     Compute each officer's last counter start slot (for officers with id % 4 == 3)
     and find counters that are empty from slot 42 onward.
-
-    Args:
-        reported_officers: list[int] — all officer IDs.
-        ro_ra_officers: list[tuple] — e.g. [(officer_id, 'RO', '2030'), ...].
-        counter_matrix: np.ndarray of shape (41, 48) — counter schedule.
-        counter_priority_list: list[int] — ordered list of counters (1-indexed).
-        hhmm_to_slot: function — converts HHMM (string/int) to slot index.
-
-    Returns:
-        officer_last_counter: dict {officer_id: last_counter_start_slot}
-        empty_counters_2030: list[int] of row indices (0-indexed)
     """
     officer_last_counter = {}
 
     # Step 1: Assign last counter start slots for eligible officers
     for officer_id in reported_officers:
-        if officer_id % 4 == 3:  # only if remainder is 3
+        if officer_id % 4 == 3:
             found = False
             for ro_ra_officer in ro_ra_officers:
-                # print(ro_ra_officer)
                 if ro_ra_officer[0] == officer_id and ro_ra_officer[1] == "RO":
                     last_counter_end_slot = hhmm_to_slot(ro_ra_officer[2])
                     found = True
                     break
             if not found:
-                last_counter_end_slot = 48  # default fallback
+                last_counter_end_slot = 48
             officer_last_counter[officer_id] = last_counter_end_slot
 
     # Step 2: Identify counters empty from slot 42 onwards
@@ -370,7 +369,8 @@ def get_officer_last_counter_and_empty_counters(
         for row_idx in range(counter_matrix.shape[0])
         if np.all(counter_matrix[row_idx, 42:] == 0)
     ]
-    # Step 3: Sort counters by priority order (convert to 0-indexed)
+
+    # Step 3: Sort counters by priority order
     empty_counters_2030.sort(
         key=lambda x: counter_priority_list.index(x + 1)
         if (x + 1) in counter_priority_list
@@ -380,73 +380,496 @@ def get_officer_last_counter_and_empty_counters(
 
 
 def update_main_officers_schedule_last_counter(
-        main_officers_schedule, officer_last_counter, empty_counters_2030
-):
+        main_officers: Dict[str, MainOfficer],
+        officer_last_counter: Dict[int, int],
+        empty_counters_2030: List[int]
+) -> Dict[str, MainOfficer]:
     """
-    For each officer in officer_last_counter, set their schedule from their
-    last counter slot onwards to 0.
+    Apply last counter assignments to main officers
+    """
+    empty_counters_copy = empty_counters_2030.copy()
+
+    for officer_key, officer in main_officers.items():
+        if officer.officer_id in officer_last_counter:
+            last_slot = officer_last_counter[officer.officer_id]
+            if last_slot >= 42 and empty_counters_copy:
+                counter_no = empty_counters_copy[
+                                 0] + 1  # Convert 0-indexed to 1-indexed
+                officer.apply_last_counter(last_slot, counter_no)
+                empty_counters_copy.pop(0)
+
+    return main_officers
+
+
+def add_takeover_ot_ctr(
+        main_officers: Dict[str, MainOfficer],
+        handwritten_counters: str
+) -> Dict[str, MainOfficer]:
+    """
+    Apply takeover counters to main officers
+    """
+    if not handwritten_counters.strip():
+        return main_officers
+
+    pairs = re.findall(r"(\d+)\s*[aA]\s*[cC]\s*(\d+)", handwritten_counters)
+
+    for officer_str, counter_str in pairs:
+        officer_key = f"M{officer_str}"
+        new_counter = int(counter_str)
+
+        if officer_key in main_officers:
+            main_officers[officer_key].apply_takeover_counter(new_counter)
+
+    return main_officers
+
+
+def build_officer_schedules(user_input: str) -> Tuple[
+    List[SOSOfficer], Dict[int, int]]:
+    """
+    Build SOSOfficer objects from user input
+
+    Returns:
+        - List of SOSOfficer objects
+        - Dict of pre-assigned counters {officer_index: counter_no}
+    """
+    input_avail = convert_input(user_input)
+    sos_officers: List[SOSOfficer] = []
+    pre_assigned_counter_dict = {}
+
+    for idx, avail in enumerate(input_avail):
+        # Search for pre-assigned counters like (AC4)
+        matches = re.findall(r"\(AC(\d+)\)", avail, flags=re.IGNORECASE)
+        if matches:
+            pre_assigned_counter_dict[idx] = int(matches[0])
+            avail = re.sub(r"\(AC\d+\)", "", avail, flags=re.IGNORECASE)
+
+        availability_schedule = parse_availability(avail)
+        officer = SOSOfficer(
+            officer_id=idx + 1,
+            availability_schedule=availability_schedule
+        )
+
+        if idx in pre_assigned_counter_dict:
+            officer.set_pre_assigned_counter(pre_assigned_counter_dict[idx])
+
+        sos_officers.append(officer)
+
+    return sos_officers, pre_assigned_counter_dict
+
+
+def generate_break_schedules(sos_officers: List[SOSOfficer]) -> List[
+    SOSOfficer]:
+    """
+    Generate break schedules for all SOS officers and store them in the officer objects
+    """
+
+    def sliding_window_ok(schedule):
+        consec = 0
+        for x in schedule:
+            if x == 1:
+                consec += 1
+                if consec > 10:
+                    return False
+            else:
+                consec = 0
+        return True
+
+    for officer in sos_officers:
+        base = officer.availability_schedule.copy()
+        work_slots = np.where(base == 1)[0]
+
+        if len(work_slots) == 0:
+            officer.add_break_schedule(base.copy())
+            continue
+
+        # Build original consecutive working stretches
+        stretches = []
+        cur = [work_slots[0]]
+        for s in work_slots[1:]:
+            if s == cur[-1] + 1:
+                cur.append(s)
+            else:
+                stretches.append(cur)
+                cur = [s]
+        stretches.append(cur)
+
+        # If all stretches ≤10, store schedule as valid directly
+        if all(len(stretch) <= 10 for stretch in stretches):
+            officer.add_break_schedule(base.copy())
+            continue
+
+        valid_schedules = []
+        seen_schedules = set()
+
+        def finalize_schedule(schedule, last_break_end, last_break_len):
+            if sliding_window_ok(schedule):
+                sig = schedule.tobytes()
+                if sig not in seen_schedules:
+                    seen_schedules.add(sig)
+                    valid_schedules.append(schedule)
+                return
+
+            # Try inserting a 1-slot break
+            for s in range(len(schedule)):
+                if schedule[s] != 1:
+                    continue
+
+                next_break_index = s
+                while next_break_index < len(schedule) and schedule[
+                    next_break_index] == 1:
+                    next_break_index += 1
+                interval_end = next_break_index - 1
+
+                prev_break_index = s
+                while prev_break_index >= 0 and schedule[
+                    prev_break_index] == 1:
+                    prev_break_index -= 1
+                interval_start = prev_break_index + 1
+
+                if s <= interval_start + 4 or s >= interval_end - 4:
+                    continue
+
+                required_gap = min(
+                    2 * last_break_len, 4
+                ) if last_break_end >= 0 else 0
+                if s - last_break_end - 1 < required_gap:
+                    continue
+
+                cand = schedule.copy()
+                cand[s] = 0
+                if sliding_window_ok(cand):
+                    sig = cand.tobytes()
+                    if sig not in seen_schedules:
+                        seen_schedules.add(sig)
+                        valid_schedules.append(cand)
+
+        def place_breaks(
+                schedule, stretch_idx=0, last_break_end=-1, last_break_len=0
+        ):
+            if stretch_idx >= len(stretches):
+                finalize_schedule(schedule, last_break_end, last_break_len)
+                return
+
+            stretch = stretches[stretch_idx]
+            min_slot, max_slot = stretch[0], stretch[-1]
+            stretch_len = len(stretch)
+
+            if stretch_len <= 10:
+                place_breaks(
+                    schedule, stretch_idx + 1, last_break_end, last_break_len
+                )
+                return
+
+            if stretch_len >= 36:
+                pattern = [2, 3, 3]
+            elif stretch_len >= 20:
+                pattern = [2, 3]
+            elif stretch_len >= 10:
+                pattern = [2]
+            else:
+                pattern = [0]
+
+            def recurse(schedule, blens, last_break_end, last_break_len):
+                if not blens:
+                    place_breaks(
+                        schedule, stretch_idx + 1, last_break_end,
+                        last_break_len
+                    )
+                    return
+
+                blen = blens[0]
+                interval_start = min_slot
+                if last_break_end >= 0:
+                    interval_start = last_break_end + 1
+
+                max_consec_start = interval_start + 10
+                max_allowed = min(max_consec_start, max_slot - blen - 3)
+
+                for s in range(interval_start + 4, max_allowed + 1):
+                    required_gap = min(
+                        2 * last_break_len, 4
+                    ) if last_break_end >= 0 else 0
+                    if s - last_break_end - 1 < required_gap:
+                        continue
+
+                    if not np.all(schedule[s: s + blen] == 1):
+                        continue
+
+                    new_sched = schedule.copy()
+                    new_sched[s: s + blen] = 0
+                    recurse(new_sched, blens[1:], s + blen, blen)
+
+            recurse(schedule, pattern, last_break_end, last_break_len)
+
+        place_breaks(base.copy())
+
+        if valid_schedules:
+            for sched in valid_schedules:
+                officer.add_break_schedule(sched)
+        else:
+            officer.add_break_schedule(base.copy())
+
+    return sos_officers
+
+
+def greedy_smooth_schedule_beam(
+        sos_officers: List[SOSOfficer],
+        main_officers: Optional[Dict[str, MainOfficer]],
+        beam_width: int = 50,
+        alpha: float = 0.1,
+        beta: float = 1.0,
+) -> Tuple[List[int], np.ndarray, float]:
+    """
+    Select best break schedule for each SOS officer using beam search
+
+    Returns:
+        - List of selected schedule indices for each officer
+        - Best work count array
+        - Best score
+    """
+    # Build initial work count
+    initial_work_count = np.zeros(NUM_SLOTS, dtype=int)
+    for officer in sos_officers:
+        initial_work_count += officer.availability_schedule
+
+    if main_officers is not None:
+        for officer in main_officers.values():
+            initial_work_count += np.where(officer.schedule != 0, 1, 0)
+
+    # Initialize beam
+    stree = SegmentTree(initial_work_count)
+    beam = [(stree, stree.compute_score(alpha, beta), [])]
+
+    # Iterate over each SOS officer
+    for officer in sos_officers:
+        new_beam = []
+
+        if len(officer.break_schedules) == 0:
+            for stree, score, indices in beam:
+                new_beam.append((stree, score, indices + [None]))
+            beam = new_beam
+            continue
+
+        for stree, score, indices in beam:
+            for idx, candidate in enumerate(officer.break_schedules):
+                delta_indices = np.where(
+                    (officer.availability_schedule == 1) & (candidate == 0)
+                )[0]
+                new_stree = deepcopy(stree)
+                if len(delta_indices) > 0:
+                    new_stree.update_delta(delta_indices, -1)
+                new_score = new_stree.compute_score(alpha, beta)
+                new_beam.append((new_stree, new_score, indices + [idx]))
+
+        beam = sorted(new_beam, key=lambda x: x[1])[:beam_width]
+
+    best_stree, best_score, chosen_indices = min(beam, key=lambda x: x[1])
+
+    # Apply selected schedules to officers
+    for i, officer in enumerate(sos_officers):
+        if chosen_indices[i] is not None:
+            officer.select_schedule(chosen_indices[i])
+
+    return chosen_indices, best_stree.work_count, best_score
+
+
+def officer_to_counter_matrix(officers: Dict[str, Officer]) -> np.ndarray:
+    """
+    Convert officer schedules to counter matrix
 
     Args:
-        main_officers_schedule: dict {officer_id: np.array of schedule}
-        officer_last_counter: dict {officer_id: last_counter_start_slot}
+        officers: Dict of Officer objects keyed by officer_key
 
     Returns:
-        updated_main_officers_schedule: dict with modified schedules
+        counter_matrix: (41, 48) array where each row is a counter
     """
-    updated_schedule = {}
+    counter_matrix = np.zeros((NUM_COUNTERS, NUM_SLOTS), dtype=object)
 
-    for officer_id, schedule in main_officers_schedule.items():
-        # Convert officer key if needed (e.g., 'M1', 'M2' etc.)
-        # If main_officers_schedule keys are officer_id directly, skip this
-        key_id = officer_id
-        if isinstance(officer_id, str) and officer_id.startswith("M"):
-            key_id = int(officer_id[1:])
-
-        # Copy schedule
-        updated_schedule[officer_id] = schedule.copy()
-
-        # Update from last counter slot onwards if officer is in officer_last_counter
-        if key_id in officer_last_counter:
-            last_slot = officer_last_counter[key_id]
-            if last_slot >= 42:
-                updated_schedule[officer_id][42:last_slot] = \
-                    empty_counters_2030[0]
-                empty_counters_2030.pop(0)
-
-    return updated_schedule
-
-
-def officer_to_counter_matrix(officer_matrix):
-    """
-    Convert officer_matrix (dict of officer → array of counter assignments per slot)
-    to a counter_matrix (num_counters x num_slots), where each row represents a counter 1..41.
-
-    Parameters:
-    -----------
-    officer_matrix : dict
-        Keys = officer names (like 'M1', 'M2', ...), values = np.array of counter assignments per slot
-
-    Returns:
-    --------
-    counter_matrix : np.array
-        Shape = (41, num_slots)
-        Rows = counters 1..41
-        Values = officer_id assigned to that counter in that slot (0 = no officer)
-
-    counter_matrix_row_names : list of str
-        Names of counters corresponding to each row, e.g., ['C1', 'C2', ..., 'C41']
-    """
-    num_counters = 41  # counters 1..41
-    num_slots = len(next(iter(officer_matrix.values())))
-    counter_matrix = np.zeros((num_counters, num_slots), dtype=object)
-
-    for officer_idx, arr in enumerate(officer_matrix.values(), start=1):
-        for slot, counter in enumerate(arr):
+    for officer_key, officer in officers.items():
+        for slot, counter in enumerate(officer.schedule):
             if counter != 0:
-                # subtract 1 since row 0 = counter 1
-                counter_matrix[counter - 1, slot] = f"M{officer_idx}"
+                counter_matrix[counter - 1, slot] = officer_key
 
     return counter_matrix
+
+
+def add_ot_counters(
+        counter_matrix: np.ndarray,
+        OT_counters: str
+) -> Tuple[np.ndarray, List[OTOfficer]]:
+    """
+    Add OT officers to counter matrix
+
+    Returns:
+        - Updated counter matrix
+        - List of OTOfficer objects created
+    """
+    if len(OT_counters) == 0:
+        return counter_matrix, []
+
+    counter_matrix_w_OT = counter_matrix.copy().astype(object)
+    OT_list = [int(x.strip()) for x in OT_counters.split(",") if x.strip()]
+
+    ot_officers = []
+    for i, OT_counter in enumerate(OT_list):
+        ot_officer = OTOfficer(officer_id=i + 1, counter_no=OT_counter)
+        ot_officers.append(ot_officer)
+        counter_matrix_w_OT[OT_counter - 1, 0:2] = [ot_officer.officer_key,
+                                                    ot_officer.officer_key]
+
+    counter_matrix_w_OT = counter_matrix_w_OT.astype(object)
+    counter_matrix_w_OT[counter_matrix_w_OT == 0] = "0"
+
+    return counter_matrix_w_OT, ot_officers
+
+
+def counter_to_officer_schedule(counter_matrix: np.ndarray) -> Dict[
+    str, List[int]]:
+    """
+    Convert counter_matrix back to officer schedules
+
+    Returns:
+        Dict where keys are officer keys (e.g., 'M1', 'S2') and values are counter assignments per slot
+    """
+    num_counters, num_slots = counter_matrix.shape
+    officer_schedule = {}
+
+    for counter_idx in range(num_counters):
+        for slot in range(num_slots):
+            officer_id = counter_matrix[counter_idx, slot]
+            if officer_id == "0":
+                continue
+            if officer_id not in officer_schedule:
+                officer_schedule[officer_id] = [0] * num_slots
+            officer_schedule[officer_id][slot] = counter_idx + 1
+
+    prefix_order = {"M": 0, "S": 1, "OT": 2}
+
+    def sort_key(k):
+        k = str(k)
+        if k.startswith("OT"):
+            prefix = "OT"
+            num_part = k[2:]
+        else:
+            prefix = k[0]
+            num_part = k[1:]
+        try:
+            num_val = int(num_part)
+        except ValueError:
+            num_val = float("inf")
+        return (prefix_order.get(prefix, 99), num_val)
+
+    sorted_keys = sorted(officer_schedule.keys(), key=sort_key)
+    sorted_schedule = {k: officer_schedule[k] for k in sorted_keys}
+
+    return sorted_schedule
+
+
+# Update run_algo function to use new OOP structure
+def run_algo(
+        main_officers_reported: str,
+        report_gl_counters: str,
+        sos_timings: str,
+        ro_ra_officers: str,
+        handwritten_counters: str,
+        OT_counters: str,
+):
+    """Main algorithm using OOP structure"""
+
+    # Generate main officers
+    main_officers_template = init_main_officers_template()
+    main_officers, reported_officers, valid_ro_ra = generate_main_officers_schedule(
+        main_officers_template,
+        main_officers_reported,
+        report_gl_counters,
+        ro_ra_officers,
+    )
+
+    # Convert to counter matrix to find empty counters
+    counter_matrix_wo_last = officer_to_counter_matrix(main_officers)
+    officer_last_counter, empty_counters_2030 = get_officer_last_counter_and_empty_counters(
+        reported_officers, valid_ro_ra, counter_matrix_wo_last
+    )
+
+    # Apply last counters
+    main_officers = update_main_officers_schedule_last_counter(
+        main_officers, officer_last_counter, empty_counters_2030
+    )
+
+    # Apply takeover counters
+    main_officers = add_takeover_ot_ctr(main_officers, handwritten_counters)
+
+    # Convert to counter matrix
+    counter_matrix = officer_to_counter_matrix(main_officers)
+
+    # Add OT officers
+    main_counter_matrix_w_OT, ot_officers = add_ot_counters(
+        counter_matrix, OT_counters
+    )
+    stats1 = generate_statistics(main_counter_matrix_w_OT)
+
+    if len(sos_timings) > 0:
+        # Build SOS officers
+        sos_officers, pre_assigned_counter_dict = build_officer_schedules(
+            sos_timings
+        )
+
+        # Generate break schedules
+        sos_officers = generate_break_schedules(sos_officers)
+
+        # Optimize schedule selection
+        chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
+            sos_officers, main_officers, beam_width=20
+        )
+        print(f"Optimization penalty: {min_penalty}")
+
+        # Get working intervals for SOS officers
+        schedule_intervals_to_officers = {}
+        for officer in sos_officers:
+            intervals = officer.get_working_intervals()
+            for interval in intervals:
+                if interval not in schedule_intervals_to_officers:
+                    schedule_intervals_to_officers[interval] = []
+                schedule_intervals_to_officers[interval].append(
+                    officer.officer_id - 1
+                )
+
+        print("=== best work count ===")
+        print(best_work_count)
+        print("===schedule_intervals_to_officers===")
+        print(schedule_intervals_to_officers)
+
+        # Add SOS officers to counter matrix
+        sos_counter_matrix = add_sos_officers(
+            pre_assigned_counter_dict,
+            schedule_intervals_to_officers,
+            main_counter_matrix_w_OT,
+        )
+
+        final_counter_matrix = merge_prefixed_matrices(
+            sos_counter_matrix, main_counter_matrix_w_OT
+        )
+
+        # Convert back to officer schedule format
+        officer_schedule = counter_to_officer_schedule(final_counter_matrix)
+
+        stats2 = generate_statistics(final_counter_matrix)
+        return (
+            main_counter_matrix_w_OT,
+            final_counter_matrix,
+            officer_schedule,
+            [stats1, stats2],
+        )
+    else:
+        # Convert main officers to schedule dict format
+        officer_schedule = {k: v.schedule.tolist() for k, v in
+                            main_officers.items()}
+        return (
+            main_counter_matrix_w_OT,
+            main_counter_matrix_w_OT,
+            officer_schedule,
+            [stats1, stats1],
+        )
 
 
 def find_partial_availability(counter_matrix):
@@ -569,217 +992,6 @@ def convert_input(user_input: str):
     return result
 
 
-def build_officer_schedules(user_input):
-    """
-    Build (officer_names, base_schedules_matrix, pre_assigned_counter_dict)
-
-    pre_assigned_counter_dict: {officer_index: counter_no}
-    """
-    input_avail = convert_input(user_input)
-    officer_names = [f"O{i + 1}" for i in range(len(input_avail))]
-    schedules = []
-    pre_assigned_counter_dict = {}
-
-    for idx, avail in enumerate(input_avail):
-        # Search for pre-assigned counters like (AC4)
-        matches = re.findall(r"\(AC(\d+)\)", avail, flags=re.IGNORECASE)
-        if matches:
-            # Take the first pre-assigned counter found for this officer
-            pre_assigned_counter_dict[idx] = int(matches[0])
-            # Remove the (ACx) part from the string before parsing slots
-            avail = re.sub(r"\(AC\d+\)", "", avail, flags=re.IGNORECASE)
-        schedules.append(parse_availability(avail))
-
-    base_schedules = np.vstack(schedules)
-    return officer_names, base_schedules, pre_assigned_counter_dict
-
-
-def generate_break_schedules(base_schedules, officer_names):
-    def sliding_window_ok(schedule):
-        """Check that no more than 10 consecutive 1s exist."""
-        consec = 0
-        for x in schedule:
-            if x == 1:
-                consec += 1
-                if consec > 10:
-                    return False
-            else:
-                consec = 0
-        return True
-
-    all_schedules = {}
-
-    for idx, officer in enumerate(officer_names):
-        base = base_schedules[idx].copy()
-        work_slots = np.where(base == 1)[0]
-
-        if len(work_slots) == 0:
-            all_schedules[officer] = [base.copy()]
-            # print(f"[{officer}] No working slots. Stored as-is: {base}")
-            continue
-
-        # Build original consecutive working stretches
-        stretches = []
-        cur = [work_slots[0]]
-        for s in work_slots[1:]:
-            if s == cur[-1] + 1:
-                cur.append(s)
-            else:
-                stretches.append(cur)
-                cur = [s]
-        stretches.append(cur)
-
-        # If all stretches ≤10, store schedule as valid directly
-        if all(len(stretch) <= 10 for stretch in stretches):
-            all_schedules[officer] = [base.copy()]
-            # print(f"[{officer}] All stretches ≤10 slots. Stored as valid: {base}")
-            continue
-
-        # print(f"[{officer}] Some stretches >10 slots. Executing mandatory-break placement.")
-
-        valid_schedules = []
-        seen_schedules = set()
-
-        def finalize_schedule(schedule, last_break_end, last_break_len):
-            """Try 1-slot breaks if sliding-window violated after mandatory breaks."""
-            if sliding_window_ok(schedule):
-                sig = schedule.tobytes()
-                if sig not in seen_schedules:
-                    seen_schedules.add(sig)
-                    valid_schedules.append(schedule)
-                    # print(f"[{officer}] Schedule valid after mandatory breaks: {schedule}")
-                return
-
-            # Try inserting a 1-slot break in all working intervals
-            for s in range(len(schedule)):
-                if schedule[s] != 1:
-                    continue
-
-                # Determine current working interval dynamically
-                next_break_index = s
-                while (
-                        next_break_index < len(schedule) and schedule[
-                    next_break_index] == 1
-                ):
-                    next_break_index += 1
-                interval_end = next_break_index - 1
-
-                prev_break_index = s
-                while prev_break_index >= 0 and schedule[
-                    prev_break_index] == 1:
-                    prev_break_index -= 1
-                interval_start = prev_break_index + 1
-
-                # First/last 4 slots rule
-                if s <= interval_start + 4 or s >= interval_end - 4:
-                    continue
-
-                # Spacing rule
-                required_gap = min(
-                    2 * last_break_len, 4
-                ) if last_break_end >= 0 else 0
-                if s - last_break_end - 1 < required_gap:
-                    continue
-
-                cand = schedule.copy()
-                cand[s] = 0
-                if sliding_window_ok(cand):
-                    sig = cand.tobytes()
-                    if sig not in seen_schedules:
-                        seen_schedules.add(sig)
-                        valid_schedules.append(cand)
-                        # print(f"[{officer}] 1-slot break placed at {s} → schedule OK: {cand}")
-
-            # if not valid_schedules:
-            # print(f"[{officer}] No feasible 1-slot break placement, rejecting schedule: {schedule}")
-
-        def place_breaks(
-                schedule, stretch_idx=0, last_break_end=-1, last_break_len=0
-        ):
-            """Recursive placement of mandatory breaks."""
-            if stretch_idx >= len(stretches):
-                finalize_schedule(schedule, last_break_end, last_break_len)
-                return
-
-            stretch = stretches[stretch_idx]
-            min_slot, max_slot = stretch[0], stretch[-1]
-            stretch_len = len(stretch)
-
-            # Skip small stretches ≤10
-            if stretch_len <= 10:
-                place_breaks(
-                    schedule, stretch_idx + 1, last_break_end, last_break_len
-                )
-                return
-
-            # Determine mandatory break pattern
-            if stretch_len >= 36:
-                pattern = [2, 3, 3]
-            elif stretch_len >= 20:
-                pattern = [2, 3]
-            elif stretch_len >= 10:
-                pattern = [2]
-            else:  # 10-19
-                pattern = [0]
-
-            def recurse(schedule, blens, last_break_end, last_break_len):
-                if not blens:
-                    place_breaks(
-                        schedule, stretch_idx + 1, last_break_end,
-                        last_break_len
-                    )
-                    return
-
-                blen = blens[0]
-
-                # Determine the start of the current working interval
-                interval_start = min_slot
-                if last_break_end >= 0:
-                    interval_start = last_break_end + 1
-
-                # Maximum allowed start to ensure no >10 consecutive slots
-                max_consec_start = interval_start + 10
-                max_allowed = min(max_consec_start, max_slot - blen - 3)
-                # also respect last 4 slots
-
-                for s in range(
-                        interval_start + 4, max_allowed + 1
-                ):  # respect first 4 slots
-                    # Spacing rule
-                    required_gap = (
-                        min(
-                            2 * last_break_len, 4
-                        ) if last_break_end >= 0 else 0
-                    )
-                    if s - last_break_end - 1 < required_gap:
-                        continue
-
-                    # Only place break if all slots are working
-                    if not np.all(schedule[s: s + blen] == 1):
-                        continue
-
-                    new_sched = schedule.copy()
-                    new_sched[s: s + blen] = 0
-                    # print(f"[{officer}] Placing mandatory break {blen} at {s}-{s + blen - 1}")
-                    # print(f"Partial schedule: {new_sched}")
-
-                    recurse(new_sched, blens[1:], s + blen, blen)
-
-            recurse(schedule, pattern, last_break_end, last_break_len)
-
-        # Run recursion
-        place_breaks(base.copy())
-
-        all_schedules[officer] = valid_schedules if valid_schedules else [
-            base.copy()]
-        # print(f"[{officer}] Finished. Number of valid schedules: {len(valid_schedules)}\n")
-
-    return all_schedules
-
-
-# all_break_schedules = generate_break_schedules(base_schedules, officer_names)
-
-
 class SegmentTree:
     def __init__(self, work_count):
         self.work_count = work_count.copy()
@@ -803,69 +1015,6 @@ class SegmentTree:
         penalty = self.compute_penalty()
         reward = self.compute_reward()
         return alpha * penalty - beta * reward
-
-
-def greedy_smooth_schedule_beam(
-        sos_schedule_matrix,
-        main_officers_schedule,
-        all_break_schedule,
-        beam_width=50,
-        alpha=0.1,
-        beta=1.0,
-):
-    Init, L = sos_schedule_matrix.shape
-
-    # initial work count
-    initial_work_count = sos_schedule_matrix.sum(axis=0)
-    if main_officers_schedule is not None:
-        main_officers_binary = np.vstack(
-            [np.where(v != 0, 1, 0) for v in main_officers_schedule.values()]
-        )
-        initial_work_count += main_officers_binary.sum(axis=0)
-
-    # Initialize beam: (SegmentTree, score, chosen_indices)
-    stree = SegmentTree(initial_work_count)
-    beam = [(stree, stree.compute_score(alpha, beta), [])]
-
-    # Iterate over each SOS officer
-    for officer in range(Init):
-        officer_key = f"O{officer + 1}"
-        candidates = all_break_schedule.get(officer_key, [])
-        new_beam = []
-
-        if not candidates:
-            # No candidates — carry forward
-            for stree, score, indices in beam:
-                new_beam.append((stree, score, indices + [None]))
-            beam = new_beam
-            continue
-
-        for stree, score, indices in beam:
-            for idx, candidate in enumerate(candidates):
-                delta_indices = np.where(
-                    (sos_schedule_matrix[officer] == 1) & (candidate == 0)
-                )[0]
-                new_stree = deepcopy(stree)
-                if len(delta_indices) > 0:
-                    new_stree.update_delta(delta_indices, -1)
-                new_score = new_stree.compute_score(alpha, beta)
-                new_beam.append((new_stree, new_score, indices + [idx]))
-
-        # Keep only top-K by total score (lower = better)
-        beam = sorted(new_beam, key=lambda x: x[1])[:beam_width]
-
-    # Return best candidate
-    best_stree, best_score, chosen_indices = min(beam, key=lambda x: x[1])
-    return chosen_indices, best_stree.work_count, best_score
-
-
-# chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
-#     base_schedules,all_break_schedules,beam_width=20  # tune beam width
-# )
-
-# print(chosen_schedule_indices)
-# print(best_work_count)
-# print(min_penalty)
 
 
 def generate_sos_schedule_matrix(
@@ -1138,121 +1287,6 @@ def merge_prefixed_matrices(counter_matrix, sos_matrix):
     return merged_matrix
 
 
-def counter_to_officer_schedule(counter_matrix):
-    """
-    Convert counter_matrix (counters x time slots) to officer_schedule dict.
-
-    Parameters
-    ----------
-    counter_matrix : np.ndarray
-        Shape (num_counters, num_slots)
-        Each element = officer_id (e.g., 'M1', 'S2', or '0')
-
-    Returns
-    -------
-    officer_schedule : dict
-        Keys = officer IDs (e.g., 'M1', 'S2')
-        Values = list of length num_slots,
-                  each element = counter number assigned at that slot (int), or 0 if not assigned
-    """
-    num_counters, num_slots = counter_matrix.shape
-    officer_schedule = {}
-
-    for counter_idx in range(num_counters):
-        for slot in range(num_slots):
-            officer_id = counter_matrix[counter_idx, slot]
-            if officer_id == "0":
-                continue
-            if officer_id not in officer_schedule:
-                officer_schedule[officer_id] = [0] * num_slots
-            officer_schedule[officer_id][
-                slot] = counter_idx + 1  # counter 1-indexed
-
-    prefix_order = {"M": 0, "S": 1, "OT": 2}
-
-    def sort_key(k):
-        k = str(k)
-        if k.startswith("OT"):
-            prefix = "OT"
-            num_part = k[2:]
-        else:
-            prefix = k[0]
-            num_part = k[1:]
-        try:
-            num_val = int(num_part)
-        except ValueError:
-            num_val = float("inf")
-        return (prefix_order.get(prefix, 99), num_val)
-
-    # Sort and rebuild the dict
-    sorted_keys = sorted(officer_schedule.keys(), key=sort_key)
-    sorted_schedule = {k: officer_schedule[k] for k in sorted_keys}
-
-    return sorted_schedule  # sorted officer schedule
-
-
-def add_takeover_ot_ctr(main_officers_schedule, handwritten_counters):
-    """
-    Reassigns index 0 and 1 of each officer's schedule based on handwritten_counters string.
-
-    Args:
-        main_officers_schedule (dict[int, np.ndarray]): {officer_id: schedule_array}
-        takeover_OT (str): e.g. "3AC12, 5AC13"
-
-    Returns:
-        dict[int, np.ndarray]: Updated schedule dictionary
-    """
-    # Copy to avoid modifying original
-    updated_schedule = {k: v.copy() for k, v in main_officers_schedule.items()}
-
-    if not handwritten_counters.strip():
-        return updated_schedule
-
-    # Find all officer-counter pairs using regex (handles spaces and lowercase)
-    pairs = re.findall(r"(\d+)\s*[aA]\s*[cC]\s*(\d+)", handwritten_counters)
-    print(pairs)
-    for officer_str, counter_str in pairs:
-        officer_key = f"M{officer_str}"
-        new_counter = int(counter_str)
-        print(officer_key)
-        print(new_counter)
-
-        if officer_key in updated_schedule:
-            updated_schedule[officer_key][0:2] = updated_schedule[officer_key][
-                                                 0:2] = [
-                new_counter,
-                new_counter,
-            ]
-
-    return updated_schedule
-
-
-def add_ot_counters(counter_matrix, OT_counters):
-    """
-    For each counter index in OT_counters, fill the first 2 columns of that row
-    with 'OT1', 'OT2', etc.
-    """
-    if len(OT_counters) == 0:
-        return counter_matrix
-
-    counter_matrix_w_OT = counter_matrix.copy().astype(
-        object
-    )  # ensure mutable strings
-    OT_list = [int(x.strip()) for x in OT_counters.split(",") if
-               x.strip()]  # 1 indexed
-    for i, OT_counter in enumerate(OT_list):
-        ot_id = f"OT{i + 1}"  # 0-index
-        counter_matrix_w_OT[OT_counter - 1, 0:2] = [ot_id, ot_id]
-
-    counter_matrix_w_OT = counter_matrix_w_OT.astype(
-        object
-    )  # ensure object dtype is changed
-    counter_matrix_w_OT[
-        counter_matrix_w_OT == 0] = "0"  # replace int 0 with '0'
-
-    return counter_matrix_w_OT
-
-
 def generate_statistics(counter_matrix: np.ndarray):
     statistics_list = []
     counter_matrix = np.array(counter_matrix)  # ensure numpy array
@@ -1285,94 +1319,6 @@ def generate_statistics(counter_matrix: np.ndarray):
     for stat in stats:
         output_text += f"{stat[0]}{stat[1]}\n{stat[2]}\n\n"
     return output_text
-
-
-def run_algo(
-        main_officers_reported,
-        report_gl_counters,
-        sos_timings,
-        ro_ra_officers,
-        handwritten_counters,
-        OT_counters,
-):
-    main_officers_template = init_main_officers_template()
-    main_officers_schedule, reported_officers, valid_ro_ra = (
-        generate_main_officers_schedule(
-            main_officers_template,
-            main_officers_reported,
-            report_gl_counters,
-            ro_ra_officers,
-        )
-    )
-    counter_matrix_wo_last = officer_to_counter_matrix(main_officers_schedule)
-    officer_last_counter, empty_counters_2030 = (
-        get_officer_last_counter_and_empty_counters(
-            reported_officers, valid_ro_ra, counter_matrix_wo_last
-        )
-    )
-    updated_main_officers_schedule = update_main_officers_schedule_last_counter(
-        main_officers_schedule, officer_last_counter, empty_counters_2030
-    )
-    updated_main_officers_schedule2 = add_takeover_ot_ctr(
-        updated_main_officers_schedule, handwritten_counters
-    )
-    counter_matrix = officer_to_counter_matrix(updated_main_officers_schedule2)
-    main_counter_matrix_w_OT = add_ot_counters(counter_matrix, OT_counters)
-    stats1 = generate_statistics(main_counter_matrix_w_OT)
-    if len(sos_timings) > 0:
-        # counter_w_partial_availability = find_partial_availability(counter_matrix)
-        officer_names, base_schedules, pre_assigned_counter_dict = (
-            build_officer_schedules(sos_timings)
-        )
-        print(pre_assigned_counter_dict)
-        all_break_schedules = generate_break_schedules(
-            base_schedules, officer_names
-        )
-        chosen_schedule_indices, best_work_count, min_penalty = (
-            greedy_smooth_schedule_beam(
-                base_schedules, None, all_break_schedules, beam_width=20
-            )
-        )
-        print(min_penalty)
-        sos_schedule_matrix = generate_sos_schedule_matrix(
-            chosen_schedule_indices, all_break_schedules, officer_names
-        )
-        schedule_intervals_to_officers, schedule_intervals = (
-            get_intervals_from_schedule(sos_schedule_matrix)
-        )
-        print("=== best work count ===")
-        print(best_work_count)
-        print("===schedule_intervals_to_officers===")
-        print(schedule_intervals_to_officers)
-        print("===main_counter_matrix_w_OT===")
-        print(main_counter_matrix_w_OT)
-        sos_counter_matrix = add_sos_officers(
-            pre_assigned_counter_dict,
-            schedule_intervals_to_officers,
-            main_counter_matrix_w_OT,
-        )
-        print("+++++++++++++++++++++++++++++++++++++++++++++++===")
-        print(sos_counter_matrix)
-        final_counter_matrix = merge_prefixed_matrices(
-            sos_counter_matrix, main_counter_matrix_w_OT
-        )
-        officer_schedule = counter_to_officer_schedule(final_counter_matrix)
-        print(final_counter_matrix)
-        print(final_counter_matrix.shape)
-        stats2 = generate_statistics(final_counter_matrix)
-        return (
-            main_counter_matrix_w_OT,
-            final_counter_matrix,
-            officer_schedule,
-            [stats1, stats2],
-        )
-    else:
-        return (
-            main_counter_matrix_w_OT,
-            main_counter_matrix_w_OT,
-            updated_main_officers_schedule2,
-            [stats1, stats1],
-        )
 
 
 # ================================================================

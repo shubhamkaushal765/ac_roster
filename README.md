@@ -159,6 +159,37 @@ graph TB
 
 ### Class Diagram
 
+Officer (abstract)
+
+├── MainOfficer
+
+├── SOSOfficer
+
+└── OTOfficer
+
+Schedule
+
+├── CounterManager
+
+├── List(Officer)
+
+├── ScheduleOptimizer
+
+└── StatisticsGenerator
+
+ScheduleOptimizer
+
+└── SegmentTree
+
+Utilities
+
+├── TimeConverter
+
+├── InputParser
+
+└── IntervalManager
+
+
 ```mermaid
 classDiagram
     class ScheduleConfig {
