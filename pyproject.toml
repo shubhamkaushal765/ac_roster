@@ -2,7 +2,7 @@
 name = "acroster"
 version = "0.1.0"
 description = "AC Roster Streamlit Application"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "absl-py==2.3.1",
     "altair==5.5.0",
