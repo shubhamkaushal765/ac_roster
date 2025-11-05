@@ -1,17 +1,13 @@
 """
 Streamlit web application for AC Roster Generation (Morning Shift)
-Updated to use refactored backend_algo with OOP design
+Updated to use ScheduleManager class from refactored backend_algo
 """
 
 import streamlit as st
 
 from acroster import Plotter
-from backend_algo import (
-    run_algo,
-    NUM_SLOTS,
-    NUM_COUNTERS,
-    START_HOUR,
-)
+from acroster.config import NUM_SLOTS, NUM_COUNTERS, START_HOUR
+from acroster.schedule_manager import ScheduleManager
 
 # === Streamlit setup ===
 st.set_page_config(page_title="AC roster Morning", layout="wide")
@@ -47,7 +43,7 @@ st.markdown(
 
 <h3>Additional Notes</h3>
 
-- `GL counters` is only applicable for officers in main roster with S/N 4,8,12 ...
+- `GL counters` is only applicable for officers in main roster with S/N 2,8,12 ...
 - `Handwritten counters` for `S/N 3` in main roster to `AC12` is written as `3AC12`
 - `RO/RA Officers` for `S/N 11` to `RO` at `1700` is written as `11RO1700`
     </div>
@@ -142,20 +138,40 @@ if generate_button:
         try:
             # Show loading spinner
             with st.spinner("Generating schedule... Please wait."):
-                # Run the roster algorithm (using refactored OOP version)
-                results = run_algo(
+                # ========== NEW: Create ScheduleManager ==========
+                manager = ScheduleManager()
+
+                # Run the roster algorithm using ScheduleManager
+                results = manager.run_algorithm(
                     main_officers_reported=main_officers_validated,
                     report_gl_counters=report_gl_counters.strip(),
                     sos_timings=sos_timings.strip(),
                     ro_ra_officers=ro_ra_officers.strip(),
                     handwritten_counters=handwritten_counters.strip(),
-                    OT_counters=OT_counters.strip(),
+                    ot_counters=OT_counters.strip(),
                 )
 
                 counter_matrix, final_counter_matrix, officer_schedule, output_text = results
 
-            # Success message
+            # Success message with additional info
             st.success("✅ Schedule generated successfully!")
+
+            # ========== NEW: Display officer counts ==========
+            counts = manager.get_all_officers_count()
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("👮 Main Officers", counts['main'])
+            with col2:
+                st.metric("🆘 SOS Officers", counts['sos'])
+            with col3:
+                st.metric("⏰ OT Officers", counts['ot'])
+            with col4:
+                st.metric("📊 Total Officers", counts['total'])
+
+            # ========== NEW: Show optimization penalty if available ==========
+            penalty = manager.get_optimization_penalty()
+            if penalty is not None:
+                st.info(f"🎯 Optimization Penalty: {penalty:.2f}")
 
             # Initialize plotter
             plotter = Plotter(
@@ -261,7 +277,6 @@ if generate_button:
                         final_counter_matrix.shape
                     )
                     st.write("**Number of Officers:**", len(officer_schedule))
-
                     st.write(
                         "**Officer Keys:**", list(officer_schedule.keys())
                     )
@@ -273,11 +288,97 @@ if generate_button:
                     st.write("**Final Counter Matrix (first 5 rows):**")
                     st.dataframe(final_counter_matrix[:5, :10])
 
-                    # Additional OOP debug info
-                    st.write("---")
-                    st.info(
-                        "✨ Using refactored OOP backend with Counter and CounterMatrix classes"
-                        )
+                # ========== NEW: Enhanced debug info using ScheduleManager ==========
+                with st.expander("📊 ScheduleManager State & Officer Details"):
+                    st.write("**Manager State:**")
+                    st.code(str(manager))
+
+                    st.write("**Officer Breakdown:**")
+
+                    # Main officers
+                    st.write("**Main Officers:**")
+                    main_officers = manager.get_main_officers()
+                    if main_officers:
+                        main_officers_info = []
+                        for key, officer in list(main_officers.items())[
+                                            :5]:  # Show first 5
+                            main_officers_info.append(
+                                {
+                                    'Key':            key,
+                                    'ID':             officer.officer_id,
+                                    'Type':           officer.__class__.__name__,
+                                    'Non-zero slots': (
+                                                              officer.schedule != 0).sum()
+                                }
+                            )
+                        st.dataframe(main_officers_info)
+                        if len(main_officers) > 5:
+                            st.caption(
+                                f"Showing 5 of {len(main_officers)} main officers"
+                            )
+
+                    # SOS officers
+                    st.write("**SOS Officers:**")
+                    sos_officers = manager.get_sos_officers()
+                    if sos_officers:
+                        sos_officers_info = []
+                        for officer in sos_officers[:5]:  # Show first 5
+                            sos_officers_info.append(
+                                {
+                                    'Key':                  officer.officer_key,
+                                    'ID':                   officer.officer_id,
+                                    'Pre-assigned Counter': officer.pre_assigned_counter,
+                                    'Break Schedules':      len(
+                                        officer.break_schedules
+                                    ),
+                                    'Selected Index':       officer.selected_schedule_index
+                                }
+                            )
+                        st.dataframe(sos_officers_info)
+                        if len(sos_officers) > 5:
+                            st.caption(
+                                f"Showing 5 of {len(sos_officers)} SOS officers"
+                            )
+                    else:
+                        st.info("No SOS officers in this schedule")
+
+                    # OT officers
+                    st.write("**OT Officers:**")
+                    ot_officers = manager.get_ot_officers()
+                    if ot_officers:
+                        ot_officers_info = []
+                        for officer in ot_officers:
+                            ot_officers_info.append(
+                                {
+                                    'Key':     officer.officer_key,
+                                    'ID':      officer.officer_id,
+                                    'Counter': officer.counter_no
+                                }
+                            )
+                        st.dataframe(ot_officers_info)
+                    else:
+                        st.info("No OT officers in this schedule")
+
+                    # Export data structure
+                    st.write("**Export Data Structure:**")
+                    export_data = manager.export_schedules_to_dict()
+                    st.json(
+                        {
+                            'keys':                 list(export_data.keys()),
+                            'officer_counts':       export_data[
+                                                        'officer_counts'],
+                            'config':               export_data['config'],
+                            'optimization_penalty': export_data[
+                                                        'optimization_penalty']
+                        }
+                    )
+
+                # Additional OOP info
+                st.info(
+                    "✨ Using ScheduleManager class with OOP architecture | "
+                    "Counter and CounterMatrix classes | "
+                    "Enhanced state management and debugging capabilities"
+                )
 
         except Exception as e:
             st.error(
@@ -297,7 +398,7 @@ st.markdown(
     """
     <div style='text-align: center; color: gray; font-size: 12px;'>
         <p>AC Roster Generator | Morning Shift Planning Tool</p>
-        <p>Powered by OOP Architecture v2.0 🚀</p>
+        <p>Powered by ScheduleManager OOP Architecture v3.0 🚀</p>
         <p>For issues or suggestions, please contact your system administrator.</p>
     </div>
     """,
