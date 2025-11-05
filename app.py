@@ -1,3 +1,8 @@
+"""
+Streamlit web application for AC Roster Generation (Morning Shift)
+Updated to use refactored backend_algo with OOP design
+"""
+
 import streamlit as st
 
 from acroster import Plotter
@@ -89,7 +94,7 @@ OT_counters = st.text_input(
 
 ro_ra_officers = st.text_input(
     "RO/RA Officers",
-    value="3RA1200, 11RO1700,15RO2130",
+    value="3RO2100, 11RO1700,15RO2130",
     help="Officers reporting late (RA) or leaving early (RO)"
 )
 
@@ -137,7 +142,7 @@ if generate_button:
         try:
             # Show loading spinner
             with st.spinner("Generating schedule... Please wait."):
-                # Run the roster algorithm
+                # Run the roster algorithm (using refactored OOP version)
                 results = run_algo(
                     main_officers_reported=main_officers_validated,
                     report_gl_counters=report_gl_counters.strip(),
@@ -268,6 +273,12 @@ if generate_button:
                     st.write("**Final Counter Matrix (first 5 rows):**")
                     st.dataframe(final_counter_matrix[:5, :10])
 
+                    # Additional OOP debug info
+                    st.write("---")
+                    st.info(
+                        "✨ Using refactored OOP backend with Counter and CounterMatrix classes"
+                        )
+
         except Exception as e:
             st.error(
                 f"❌ An error occurred while generating the schedule: {str(e)}"
@@ -286,6 +297,7 @@ st.markdown(
     """
     <div style='text-align: center; color: gray; font-size: 12px;'>
         <p>AC Roster Generator | Morning Shift Planning Tool</p>
+        <p>Powered by OOP Architecture v2.0 🚀</p>
         <p>For issues or suggestions, please contact your system administrator.</p>
     </div>
     """,
