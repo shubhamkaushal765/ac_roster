@@ -1,8 +1,7 @@
 import streamlit as st
+from acroster import Plotter
 from backend_algo import (
     run_algo,
-    plot_officer_timetable_with_labels,
-    plot_officer_schedule_with_labels,
 )
 
 # === Streamlit setup ===
@@ -85,7 +84,8 @@ if st.button("Generate Schedule"):
 
         # Display outputs
         st.subheader("Counter Timetable w/o SOS")
-        fig1 = plot_officer_timetable_with_labels(counter_matrix)
+        plotter = Plotter()
+        fig1 = plotter.plot_officer_timetable_with_labels(counter_matrix)
         st.plotly_chart(fig1, use_container_width=True, key="fig_counter_matrix")
 
         # Display in a scrollable text area
@@ -101,7 +101,7 @@ if st.button("Generate Schedule"):
         )
 
         st.subheader("Counter Timetable w SOS")
-        fig2 = plot_officer_timetable_with_labels(final_counter_matrix)
+        fig2 = plotter.plot_officer_timetable_with_labels(final_counter_matrix)
         st.plotly_chart(fig2, use_container_width=True, key="fig_counter_matrix_w_SOS")
         # Display in a scrollable text area
         st.text_area("Counter Manning including SOS", value=output_text[1], height=400)
@@ -115,5 +115,5 @@ if st.button("Generate Schedule"):
             key="stats2",
         )
         st.subheader("Officer Timetable")
-        fig3 = plot_officer_schedule_with_labels(officer_schedule)
+        fig3 = plotter.plot_officer_schedule_with_labels(officer_schedule)
         st.plotly_chart(fig3, use_container_width=True, key="fig_officer_matrix")

@@ -1,9 +1,9 @@
 import re
 from collections import defaultdict
 from copy import deepcopy
+from acroster import Plotter
 
 import numpy as np
-import plotly.graph_objects as go
 
 NUM_SLOTS = 48
 NUM_COUNTERS = 41
@@ -48,48 +48,48 @@ def get_counter(counter_number: int):
 
 def add_4main_roster(full_counters):
     a = (
-        [full_counters[0]] * 6
-        + [0] * 2
-        + [full_counters[1]] * 7
-        + [0] * 3
-        + [full_counters[2]] * 9
-        + [0] * 3
-        + [full_counters[0]] * 9
-        + [0]
-        + [full_counters[1]] * 8
+            [full_counters[0]] * 6
+            + [0] * 2
+            + [full_counters[1]] * 7
+            + [0] * 3
+            + [full_counters[2]] * 9
+            + [0] * 3
+            + [full_counters[0]] * 9
+            + [0]
+            + [full_counters[1]] * 8
     )
     b = (
-        [full_counters[1]] * 8
-        + [0] * 2
-        + [full_counters[2]] * 8
-        + [0] * 3
-        + [full_counters[0]] * 9
-        + [0] * 3
-        + [full_counters[1]] * 7
-        + [0]
-        + [full_counters[2]] * 7
+            [full_counters[1]] * 8
+            + [0] * 2
+            + [full_counters[2]] * 8
+            + [0] * 3
+            + [full_counters[0]] * 9
+            + [0] * 3
+            + [full_counters[1]] * 7
+            + [0]
+            + [full_counters[2]] * 7
     )
     c = (
-        [full_counters[2]] * 10
-        + [0] * 2
-        + [full_counters[0]] * 9
-        + [0] * 3
-        + [full_counters[1]] * 9
-        + [0] * 3
-        + [full_counters[2]] * 5
-        + [0]
-        + [0] * 6
+            [full_counters[2]] * 10
+            + [0] * 2
+            + [full_counters[0]] * 9
+            + [0] * 3
+            + [full_counters[1]] * 9
+            + [0] * 3
+            + [full_counters[2]] * 5
+            + [0]
+            + [0] * 6
     )
     d = (
-        [0] * 5
-        + [0] * 1
-        + [full_counters[0]] * 6
-        + [0] * 2
-        + [full_counters[1]] * 10
-        + [0] * 3
-        + [full_counters[2]] * 9
-        + [0] * 3
-        + [full_counters[0]] * 9
+            [0] * 5
+            + [0] * 1
+            + [full_counters[0]] * 6
+            + [0] * 2
+            + [full_counters[1]] * 10
+            + [0] * 3
+            + [full_counters[2]] * 9
+            + [0] * 3
+            + [full_counters[0]] * 9
     )
     return (a, b, c, d)
 
@@ -97,92 +97,92 @@ def add_4main_roster(full_counters):
 def init_main_officers_template(main_total=24, exclude_main: list = None):
     main_officers = {}
     main_officers[1] = (
-        [41] * 6
-        + [0] * 2
-        + [30] * 7
-        + [0] * 3
-        + [20] * 9
-        + [0] * 3
-        + [40] * 9
-        + [0]
-        + [30] * 8
+            [41] * 6
+            + [0] * 2
+            + [30] * 7
+            + [0] * 3
+            + [20] * 9
+            + [0] * 3
+            + [40] * 9
+            + [0]
+            + [30] * 8
     )
     main_officers[2] = (
-        [30] * 8
-        + [0] * 2
-        + [20] * 8
-        + [0] * 3
-        + [41] * 9
-        + [0] * 3
-        + [30] * 7
-        + [0]
-        + [20] * 7
+            [30] * 8
+            + [0] * 2
+            + [20] * 8
+            + [0] * 3
+            + [41] * 9
+            + [0] * 3
+            + [30] * 7
+            + [0]
+            + [20] * 7
     )
     main_officers[3] = (
-        [20] * 10
-        + [0] * 2
-        + [41] * 9
-        + [0] * 3
-        + [30] * 9
-        + [0] * 3
-        + [20] * 5
-        + [0]
-        + [0] * 6
+            [20] * 10
+            + [0] * 2
+            + [41] * 9
+            + [0] * 3
+            + [30] * 9
+            + [0] * 3
+            + [20] * 5
+            + [0]
+            + [0] * 6
     )
     main_officers[4] = (
-        [0] * 5
-        + [0] * 1
-        + [40] * 6
-        + [0] * 2
-        + [30] * 10
-        + [0] * 3
-        + [20] * 9
-        + [0] * 3
-        + [41] * 9
+            [0] * 5
+            + [0] * 1
+            + [40] * 6
+            + [0] * 2
+            + [30] * 10
+            + [0] * 3
+            + [20] * 9
+            + [0] * 3
+            + [41] * 9
     )
     main_officers[5] = (
-        [40] * 6
-        + [0] * 2
-        + [9] * 7
-        + [0] * 3
-        + [29] * 9
-        + [0] * 3
-        + [41] * 9
-        + [0]
-        + [9] * 8
+            [40] * 6
+            + [0] * 2
+            + [9] * 7
+            + [0] * 3
+            + [29] * 9
+            + [0] * 3
+            + [41] * 9
+            + [0]
+            + [9] * 8
     )
     main_officers[6] = (
-        [9] * 8
-        + [0] * 2
-        + [29] * 8
-        + [0] * 3
-        + [40] * 9
-        + [0] * 3
-        + [9] * 7
-        + [0]
-        + [29] * 7
+            [9] * 8
+            + [0] * 2
+            + [29] * 8
+            + [0] * 3
+            + [40] * 9
+            + [0] * 3
+            + [9] * 7
+            + [0]
+            + [29] * 7
     )
     main_officers[7] = (
-        [29] * 10
-        + [0] * 2
-        + [40] * 9
-        + [0] * 3
-        + [9] * 9
-        + [0] * 3
-        + [29] * 5
-        + [0]
-        + [0] * 6
+            [29] * 10
+            + [0] * 2
+            + [40] * 9
+            + [0] * 3
+            + [9] * 9
+            + [0] * 3
+            + [29] * 5
+            + [0]
+            + [0] * 6
     )
     main_officers[8] = (
-        [0] * 5
-        + [0] * 1
-        + [41] * 6
-        + [0] * 2
-        + [9] * 10
-        + [0] * 3
-        + [29] * 9
-        + [0] * 3
-        + [40] * 9
+            [0] * 5
+            + [0] * 1
+            + [41] * 6
+            + [0] * 2
+            + [9] * 10
+            + [0] * 3
+            + [29] * 9
+            + [0] * 3
+            + [40] * 9
     )
 
     # Define groups of officers and their rosters
@@ -212,10 +212,10 @@ def init_main_officers_template(main_total=24, exclude_main: list = None):
 
 
 def generate_main_officers_schedule(
-    main_officers_template,
-    main_officers_reported,
-    report_gl_counters,
-    main_officers_report_late_or_leave_early,
+        main_officers_template,
+        main_officers_reported,
+        report_gl_counters,
+        main_officers_report_late_or_leave_early,
 ):
     # Parse which officers reported
     reported_officers = set()
@@ -250,27 +250,33 @@ def generate_main_officers_schedule(
             if "RA" in entry:
                 idx = entry.index("RA")
                 officer_id = int(entry[:idx])
-                hhmm = entry[idx + 2 :]
+                hhmm = entry[idx + 2:]
                 adj_type = "RA"
             else:
                 idx = entry.index("RO")
                 officer_id = int(entry[:idx])
-                hhmm = entry[idx + 2 :]
+                hhmm = entry[idx + 2:]
                 adj_type = "RO"
 
             # Officer must be in reported_officers
             if officer_id not in reported_officers:
-                print(f"⚠️ Skipping {entry}: officer {officer_id} not in reported list.")
+                print(
+                    f"⚠️ Skipping {entry}: officer {officer_id} not in reported list."
+                )
                 continue
 
             # Validate HHMM
             h = int(hhmm[:2])
             m = int(hhmm[2:])
             if not (10 <= h <= 22):
-                print(f"⚠️ Skipping {entry}: hour {h} out of range (1000–2200)")
+                print(
+                    f"⚠️ Skipping {entry}: hour {h} out of range (1000–2200)"
+                )
                 continue
             if m not in (0, 15, 30, 45):
-                print(f"⚠️ Skipping {entry}: minutes {m} must be 00, 15, 30, or 45")
+                print(
+                    f"⚠️ Skipping {entry}: minutes {m} must be 00, 15, 30, or 45"
+                )
                 continue
             if h == 22 and m > 0:
                 print(f"⚠️ Skipping {entry}: must not exceed 2200")
@@ -280,7 +286,9 @@ def generate_main_officers_schedule(
         return valid_entries
 
     # Validate and parse adjustments
-    valid_adjustments = validate_adjustments(main_officers_report_late_or_leave_early)
+    valid_adjustments = validate_adjustments(
+        main_officers_report_late_or_leave_early
+    )
     adjustments = {}
     for officer_id, adj_type, hhmm in valid_adjustments:
         slot = hhmm_to_slot(hhmm)
@@ -309,7 +317,7 @@ def generate_main_officers_schedule(
         if "AC" in officer_counter:
             idx = officer_counter.index("AC")
             officer_id = int(officer_counter[:idx])
-            counter_no = int(officer_counter[idx + 2 :])
+            counter_no = int(officer_counter[idx + 2:])
 
             # Only apply to officers divisible by 4
             if officer_id % 4 == 0:
@@ -323,7 +331,7 @@ def generate_main_officers_schedule(
 
 
 def get_officer_last_counter_and_empty_counters(
-    reported_officers, ro_ra_officers, counter_matrix
+        reported_officers, ro_ra_officers, counter_matrix
 ):
     """
     Compute each officer's last counter start slot (for officers with id % 4 == 3)
@@ -372,7 +380,7 @@ def get_officer_last_counter_and_empty_counters(
 
 
 def update_main_officers_schedule_last_counter(
-    main_officers_schedule, officer_last_counter, empty_counters_2030
+        main_officers_schedule, officer_last_counter, empty_counters_2030
 ):
     """
     For each officer in officer_last_counter, set their schedule from their
@@ -401,7 +409,8 @@ def update_main_officers_schedule_last_counter(
         if key_id in officer_last_counter:
             last_slot = officer_last_counter[key_id]
             if last_slot >= 42:
-                updated_schedule[officer_id][42:last_slot] = empty_counters_2030[0]
+                updated_schedule[officer_id][42:last_slot] = \
+                    empty_counters_2030[0]
                 empty_counters_2030.pop(0)
 
     return updated_schedule
@@ -522,7 +531,8 @@ def find_consecutive_intervals(intervals, selected_index):
         return None, intervals
 
     # Compute unused intervals by index
-    unused_intervals = [iv for i, iv in enumerate(intervals) if i not in used_indices]
+    unused_intervals = [iv for i, iv in enumerate(intervals) if
+                        i not in used_indices]
 
     return path_result, unused_intervals
 
@@ -540,7 +550,7 @@ def parse_availability(avail_str: str) -> np.ndarray:
         end_slot = hhmm_to_slot(end)
 
         # Fill working slots; end is inclusive now
-        schedule[start_slot : end_slot + 1] = 1
+        schedule[start_slot: end_slot + 1] = 1
 
     return schedule
 
@@ -648,13 +658,15 @@ def generate_break_schedules(base_schedules, officer_names):
                 # Determine current working interval dynamically
                 next_break_index = s
                 while (
-                    next_break_index < len(schedule) and schedule[next_break_index] == 1
+                        next_break_index < len(schedule) and schedule[
+                    next_break_index] == 1
                 ):
                     next_break_index += 1
                 interval_end = next_break_index - 1
 
                 prev_break_index = s
-                while prev_break_index >= 0 and schedule[prev_break_index] == 1:
+                while prev_break_index >= 0 and schedule[
+                    prev_break_index] == 1:
                     prev_break_index -= 1
                 interval_start = prev_break_index + 1
 
@@ -663,7 +675,9 @@ def generate_break_schedules(base_schedules, officer_names):
                     continue
 
                 # Spacing rule
-                required_gap = min(2 * last_break_len, 4) if last_break_end >= 0 else 0
+                required_gap = min(
+                    2 * last_break_len, 4
+                ) if last_break_end >= 0 else 0
                 if s - last_break_end - 1 < required_gap:
                     continue
 
@@ -679,7 +693,9 @@ def generate_break_schedules(base_schedules, officer_names):
             # if not valid_schedules:
             # print(f"[{officer}] No feasible 1-slot break placement, rejecting schedule: {schedule}")
 
-        def place_breaks(schedule, stretch_idx=0, last_break_end=-1, last_break_len=0):
+        def place_breaks(
+                schedule, stretch_idx=0, last_break_end=-1, last_break_len=0
+        ):
             """Recursive placement of mandatory breaks."""
             if stretch_idx >= len(stretches):
                 finalize_schedule(schedule, last_break_end, last_break_len)
@@ -691,7 +707,9 @@ def generate_break_schedules(base_schedules, officer_names):
 
             # Skip small stretches ≤10
             if stretch_len <= 10:
-                place_breaks(schedule, stretch_idx + 1, last_break_end, last_break_len)
+                place_breaks(
+                    schedule, stretch_idx + 1, last_break_end, last_break_len
+                )
                 return
 
             # Determine mandatory break pattern
@@ -707,7 +725,8 @@ def generate_break_schedules(base_schedules, officer_names):
             def recurse(schedule, blens, last_break_end, last_break_len):
                 if not blens:
                     place_breaks(
-                        schedule, stretch_idx + 1, last_break_end, last_break_len
+                        schedule, stretch_idx + 1, last_break_end,
+                        last_break_len
                     )
                     return
 
@@ -724,21 +743,23 @@ def generate_break_schedules(base_schedules, officer_names):
                 # also respect last 4 slots
 
                 for s in range(
-                    interval_start + 4, max_allowed + 1
+                        interval_start + 4, max_allowed + 1
                 ):  # respect first 4 slots
                     # Spacing rule
                     required_gap = (
-                        min(2 * last_break_len, 4) if last_break_end >= 0 else 0
+                        min(
+                            2 * last_break_len, 4
+                        ) if last_break_end >= 0 else 0
                     )
                     if s - last_break_end - 1 < required_gap:
                         continue
 
                     # Only place break if all slots are working
-                    if not np.all(schedule[s : s + blen] == 1):
+                    if not np.all(schedule[s: s + blen] == 1):
                         continue
 
                     new_sched = schedule.copy()
-                    new_sched[s : s + blen] = 0
+                    new_sched[s: s + blen] = 0
                     # print(f"[{officer}] Placing mandatory break {blen} at {s}-{s + blen - 1}")
                     # print(f"Partial schedule: {new_sched}")
 
@@ -749,7 +770,8 @@ def generate_break_schedules(base_schedules, officer_names):
         # Run recursion
         place_breaks(base.copy())
 
-        all_schedules[officer] = valid_schedules if valid_schedules else [base.copy()]
+        all_schedules[officer] = valid_schedules if valid_schedules else [
+            base.copy()]
         # print(f"[{officer}] Finished. Number of valid schedules: {len(valid_schedules)}\n")
 
     return all_schedules
@@ -784,12 +806,12 @@ class SegmentTree:
 
 
 def greedy_smooth_schedule_beam(
-    sos_schedule_matrix,
-    main_officers_schedule,
-    all_break_schedule,
-    beam_width=50,
-    alpha=0.1,
-    beta=1.0,
+        sos_schedule_matrix,
+        main_officers_schedule,
+        all_break_schedule,
+        beam_width=50,
+        alpha=0.1,
+        beta=1.0,
 ):
     Init, L = sos_schedule_matrix.shape
 
@@ -846,7 +868,9 @@ def greedy_smooth_schedule_beam(
 # print(min_penalty)
 
 
-def generate_sos_schedule_matrix(saved_indices, all_break_schedules, officer_names):
+def generate_sos_schedule_matrix(
+        saved_indices, all_break_schedules, officer_names
+):
     """
     Generate a 2D matrix of officers' schedules based on selected indices.
 
@@ -878,7 +902,9 @@ def generate_sos_schedule_matrix(saved_indices, all_break_schedules, officer_nam
 
 def get_intervals_from_schedule(sos_schedule_matrix):
     interval_dict = defaultdict(list)
-    sos_schedule_matrix = np.array(sos_schedule_matrix)  # Ensure it's a NumPy array
+    sos_schedule_matrix = np.array(
+        sos_schedule_matrix
+    )  # Ensure it's a NumPy array
 
     for row_idx, row in enumerate(sos_schedule_matrix):
         n = len(row)
@@ -941,7 +967,8 @@ def prefix_non_zero(counter_matrix, prefix):
 
 
 def add_sos_officers(
-    pre_assigned_counter_dict, schedule_intervals_to_officers, main_counter_matrix
+        pre_assigned_counter_dict, schedule_intervals_to_officers,
+        main_counter_matrix
 ):
     """
     Assign officers to counters using gap-aware greedy interval packing.
@@ -966,13 +993,16 @@ def add_sos_officers(
 
     # Sort intervals by start time, then by end time
     sorted_intervals = sorted(
-        schedule_intervals_to_officers.items(), key=lambda x: (x[0][0], x[0][1])
+        schedule_intervals_to_officers.items(),
+        key=lambda x: (x[0][0], x[0][1])
     )
 
     # Helper: check if interval is empty in a counter
     def is_interval_empty(counter_id, start, end):
         """Check if all slots in [start, end] are '0' in sos_main_counter_matrix"""
-        return np.all(sos_main_counter_matrix[counter_id - 1, start : end + 1] == "0")
+        return np.all(
+            sos_main_counter_matrix[counter_id - 1, start: end + 1] == "0"
+        )
 
     # Helper: check if interval connects to existing assignments
     def is_connected(counter_id, start, end):
@@ -981,7 +1011,8 @@ def add_sos_officers(
         if start > 0 and sos_counter_matrix[counter_id - 1, start - 1] != "0":
             return True
         # Check connection to next slot
-        if end < NUM_SLOTS - 1 and sos_counter_matrix[counter_id - 1, end + 1] != "0":
+        if end < NUM_SLOTS - 1 and sos_counter_matrix[
+            counter_id - 1, end + 1] != "0":
             return True
         return False
 
@@ -1020,9 +1051,9 @@ def add_sos_officers(
 
             # Step 0: check if first counter is already pre-assigned
             if (
-                len(pre_assigned_counter_dict) > 0
-                and officer_id in pre_assigned_counter_dict
-                and start == 0
+                    len(pre_assigned_counter_dict) > 0
+                    and officer_id in pre_assigned_counter_dict
+                    and start == 0
             ):
                 best_counter = pre_assigned_counter_dict[officer_id]
 
@@ -1064,8 +1095,9 @@ def add_sos_officers(
                     continue
 
             # Assign officer to counter
-            sos_counter_matrix[best_counter - 1, start : end + 1] = f"S{officer_id + 1}"
-            sos_main_counter_matrix[best_counter - 1, start : end + 1] = (
+            sos_counter_matrix[best_counter - 1,
+            start: end + 1] = f"S{officer_id + 1}"
+            sos_main_counter_matrix[best_counter - 1, start: end + 1] = (
                 f"S{officer_id + 1}"
             )
 
@@ -1133,7 +1165,8 @@ def counter_to_officer_schedule(counter_matrix):
                 continue
             if officer_id not in officer_schedule:
                 officer_schedule[officer_id] = [0] * num_slots
-            officer_schedule[officer_id][slot] = counter_idx + 1  # counter 1-indexed
+            officer_schedule[officer_id][
+                slot] = counter_idx + 1  # counter 1-indexed
 
     prefix_order = {"M": 0, "S": 1, "OT": 2}
 
@@ -1157,350 +1190,6 @@ def counter_to_officer_schedule(counter_matrix):
 
     return sorted_schedule  # sorted officer schedule
 
-def plot_officer_timetable_with_labels(counter_matrix):
-    """
-    Plots an interactive timetable with officer IDs inside each cell.
-    Consecutive cells with the same officer are merged with one label and thick border.
-
-    Parameters:
-    - counter_matrix: 2D numpy array or list of lists
-        Shape: (NUM_SLOTS, NUM_COUNTERS) = (48, 41)
-        counter_matrix[i, j] = officer at time_slot i, counter j
-
-    Returns:
-    - fig: Plotly Figure object
-    """
-    counter_matrix = np.array(counter_matrix, dtype=object)
-    counter_matrix[counter_matrix == 0] = "0"
-    time_slots, num_counters = counter_matrix.shape  # (48, 41)
-
-    # Create numeric matrix for colors
-    color_matrix = np.zeros((time_slots, num_counters), dtype=int)
-    for i in range(time_slots):
-        for j in range(num_counters):
-            val = str(counter_matrix[i, j])
-            if val.startswith("M"):
-                color_matrix[i, j] = 1
-            elif val.startswith("S"):
-                color_matrix[i, j] = 2
-            elif val.startswith("OT"):
-                color_matrix[i, j] = 3
-            else:
-                color_matrix[i, j] = 0
-
-    # === Generate x-axis labels using slot_to_hhmm ===
-    x_labels = [slot_to_hhmm(t) for t in range(num_counters)]
-
-    # Create heatmap with proper hover text
-    hover_text = [
-        [f"Time: {x_labels[j]}<br>Counter: C{i+1}<br>Officer: {counter_matrix[i, j]}" for j in range(num_counters)]
-        for i in range(time_slots)
-    ]
-
-    heatmap = go.Heatmap(
-        z=color_matrix,
-        y=[f"C{t + 1}" for t in range(time_slots)],
-        x=list(range(num_counters)),
-        text=hover_text,
-        hoverinfo="text",
-        showscale=False,
-        colorscale=[
-            [0, "#2E2C2C"],  # Unassigned
-            [0.33, "#a2d2ff"],  # M-type
-            [0.66, "#ffc6d9"],  # S-type
-            [1, "#FDFD96"],  # OT-type
-        ],
-        zmin=0,
-        zmax=3,
-        opacity=0.85
-    )
-
-    # Find merged regions (consecutive horizontal cells with same officer)
-    annotations = []
-    shapes = []
-
-    for i in range(time_slots):
-        j = 0
-        while j < num_counters:
-            officer = str(counter_matrix[i, j])
-            if officer != "0":
-                # Find the end of this consecutive block
-                j_end = j
-                while j_end < num_counters and str(counter_matrix[i, j_end]) == officer:
-                    j_end += 1
-
-                # Add annotation at the center of the merged region
-                center_x = (j + j_end - 1) / 2
-                annotations.append(
-                    dict(
-                        x=center_x,
-                        y=i,
-                        text=officer,
-                        showarrow=False,
-                        font=dict(color="black", size=18),
-                    )
-                )
-
-                # Add border around the merged region
-                shapes.append(
-                    dict(
-                        type="rect",
-                        x0=j - 0.5,
-                        x1=j_end - 0.5,
-                        y0=i - 0.5,
-                        y1=i + 0.5,
-                        line=dict(color="black", width=1),
-                        fillcolor="rgba(0,0,0,0)",
-                    )
-                )
-
-                j = j_end
-            else:
-                j += 1
-    
-    # === Add graph-paper style grid lines ONLY in unassigned cells ===
-    grid_shapes = []
-    for x in range(num_counters + 1):
-        # Check each row segment to see if we should draw the line
-        for i in range(time_slots):
-            # Determine if this segment should have a grid line
-            # Only draw if both adjacent cells (or edge) are unassigned
-            left_unassigned = (x == 0) or (x > 0 and color_matrix[i, x-1] == 0)
-            right_unassigned = (x == num_counters) or (x < num_counters and color_matrix[i, x] == 0)
-            
-            if left_unassigned and right_unassigned:
-                # Every 4 slots → thick solid line
-                if x % 4 == 0:
-                    grid_shapes.append(
-                        dict(
-                            type="line",
-                            x0=x - 0.5,
-                            x1=x - 0.5,
-                            y0=i - 0.5,
-                            y1=i + 0.5,
-                            line=dict(color="rgba(150,150,150,0.6)", width=1),
-                            layer='above'
-                        )
-                    )
-                # Every 2 slots → dashed line
-                elif x % 2 == 0:
-                    grid_shapes.append(
-                        dict(
-                            type="line",
-                            x0=x - 0.5,
-                            x1=x - 0.5,
-                            y0=i - 0.5,
-                            y1=i + 0.5,
-                            line=dict(color="rgba(120,120,120,0.4)", width=2, dash="dash"),
-                            layer='above'
-                        )
-                    )
-
-    # Combine all shapes
-    all_shapes = shapes + grid_shapes
-    
-    # Create figure
-    fig = go.Figure(data=[heatmap])
-    fig.update_layout(
-        title="Officer Timetable",
-        xaxis_title="Time",
-        yaxis_title="Counter",
-        annotations=annotations,
-        shapes=all_shapes,
-        yaxis_autorange="reversed",
-        dragmode=False,
-        autosize=True,
-        height=900,
-        width=900
-    )
-    
-    # Show ticks with time labels
-    fig.update_xaxes(
-        tickvals=list(range(0, num_counters, 4)), 
-        ticktext=[x_labels[i] for i in range(0, num_counters, 4)],
-        showgrid=False, 
-        showticklabels=True, 
-        zeroline=False,
-        type='linear',
-        ticks = ''
-    )
-    fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
-    
-    return fig
-
-
-def plot_officer_schedule_with_labels(officer_schedule):
-    """
-    Plots an interactive timetable showing each officer's assigned counter at each time slot.
-    Consecutive same-counter assignments are merged and bordered.
-
-    Parameters
-    ----------
-    officer_schedule : dict
-        Keys = officer IDs (e.g., 'M1', 'S2', ...)
-        Values = list of counter numbers (int) for each time slot (0 = unassigned)
-
-    Returns
-    -------
-    fig : plotly.graph_objects.Figure
-    """
-    officers = list(officer_schedule.keys())
-    num_officers = len(officers)
-    num_slots = len(next(iter(officer_schedule.values())))
-
-    # Build numeric color matrix for background color coding
-    color_matrix = np.zeros((num_officers, num_slots), dtype=int)
-    label_matrix = np.empty((num_officers, num_slots), dtype=object)
-
-    for i, officer_id in enumerate(officers):
-        for t, counter in enumerate(officer_schedule[officer_id]):
-            officer_str = str(officer_id)
-            if counter != 0:
-                color_matrix[i, t] = (
-                    1
-                    if officer_str.startswith("M")
-                    else 2
-                    if officer_str.startswith("S")
-                    else 3
-                )
-                label_matrix[i, t] = f"C{counter}"
-            else:
-                color_matrix[i, t] = 0
-                label_matrix[i, t] = ""
-
-    # Generate x-axis labels using slot_to_hhmm
-    x_labels = [slot_to_hhmm(t) for t in range(num_slots)]
-
-    # Base heatmap with numeric x-axis
-    heatmap = go.Heatmap(
-        z=color_matrix,
-        y=officers,
-        x=list(range(num_slots)),  # Use numeric values
-        showscale=False,
-        colorscale=[
-            [0, "#2E2C2C"],  # Unassigned
-            [0.33, "#a2d2ff"],  # M-type
-            [0.66, "#ffc6d9"],  # S-type
-            [1, "#FDFD96"],  # OT-type
-        ],
-        zmin=0,
-        zmax=3,
-        opacity=0.85
-    )
-
-    annotations = []
-    shapes = []
-
-    # Merge consecutive same-counter cells horizontally
-    for i, officer_id in enumerate(officers):
-        t = 0
-        while t < num_slots:
-            counter = officer_schedule[officer_id][t]
-            if counter != 0:
-                t_end = t
-                while (
-                    t_end < num_slots and officer_schedule[officer_id][t_end] == counter
-                ):
-                    t_end += 1
-
-                # Add merged label at center of block
-                center_x = (t + t_end - 1) / 2
-                annotations.append(
-                    dict(
-                        x=center_x,
-                        y=officer_id,
-                        text=f"C{counter}",
-                        showarrow=False,
-                        font=dict(color="black", size=18),
-                    )
-                )
-
-                # Add thick border around merged region
-                shapes.append(
-                    dict(
-                        type="rect",
-                        x0=t - 0.5,
-                        x1=t_end - 0.5,
-                        y0=i - 0.5,
-                        y1=i + 0.5,
-                        line=dict(color="black", width=1),
-                        fillcolor="rgba(0,0,0,0)",
-                    )
-                )
-
-                t = t_end
-            else:
-                t += 1
-
-    # === Add graph-paper style grid lines ONLY in unassigned cells ===
-    grid_shapes = []
-    for x in range(num_slots + 1):
-        # Check each officer segment to see if we should draw the line
-        for i in range(num_officers):
-            # Determine if this segment should have a grid line
-            # Only draw if both adjacent cells (or edge) are unassigned
-            left_unassigned = (x == 0) or (x > 0 and color_matrix[i, x-1] == 0)
-            right_unassigned = (x == num_slots) or (x < num_slots and color_matrix[i, x] == 0)
-            
-            if left_unassigned and right_unassigned:
-                # Every 4 slots → thick solid line
-                if x % 4 == 0:
-                    grid_shapes.append(
-                        dict(
-                            type="line",
-                            x0=x - 0.5,
-                            x1=x - 0.5,
-                            y0=i - 0.5,
-                            y1=i + 0.5,
-                            line=dict(color="rgba(150,150,150,0.6)", width=1),
-                            layer='above'
-                        )
-                    )
-                # Every 2 slots → dashed line
-                elif x % 2 == 0:
-                    grid_shapes.append(
-                        dict(
-                            type="line",
-                            x0=x - 0.5,
-                            x1=x - 0.5,
-                            y0=i - 0.5,
-                            y1=i + 0.5,
-                            line=dict(color="rgba(120,120,120,0.4)", width=2, dash="dash"),
-                            layer='above'
-                        )
-                    )
-
-    # Combine all shapes
-    all_shapes = shapes + grid_shapes
-
-    # Build figure
-    fig = go.Figure(data=[heatmap])
-    fig.update_layout(
-        title="Officer Timetable (Counter Assignments)",
-        xaxis_title="Time",
-        yaxis_title="Officer",
-        annotations=annotations,
-        shapes=all_shapes,
-        yaxis_autorange="reversed",
-        dragmode=False,
-        autosize=True,
-        height=900,
-        width=900
-    )
-    
-    # Show ticks with time labels
-    fig.update_xaxes(
-        tickvals=list(range(0, num_slots, 4)), 
-        ticktext=[x_labels[i] for i in range(0, num_slots, 4)],
-        showgrid=False, 
-        showticklabels=True, 
-        zeroline=False,
-        type='linear',
-        ticks = ''
-    )
-    fig.update_yaxes(showgrid=False, showticklabels=True, zeroline=False)
-
-    return fig
 
 def add_takeover_ot_ctr(main_officers_schedule, handwritten_counters):
     """
@@ -1529,7 +1218,8 @@ def add_takeover_ot_ctr(main_officers_schedule, handwritten_counters):
         print(new_counter)
 
         if officer_key in updated_schedule:
-            updated_schedule[officer_key][0:2] = updated_schedule[officer_key][0:2] = [
+            updated_schedule[officer_key][0:2] = updated_schedule[officer_key][
+                                                 0:2] = [
                 new_counter,
                 new_counter,
             ]
@@ -1545,8 +1235,11 @@ def add_ot_counters(counter_matrix, OT_counters):
     if len(OT_counters) == 0:
         return counter_matrix
 
-    counter_matrix_w_OT = counter_matrix.copy().astype(object)  # ensure mutable strings
-    OT_list = [int(x.strip()) for x in OT_counters.split(",") if x.strip()]  # 1 indexed
+    counter_matrix_w_OT = counter_matrix.copy().astype(
+        object
+    )  # ensure mutable strings
+    OT_list = [int(x.strip()) for x in OT_counters.split(",") if
+               x.strip()]  # 1 indexed
     for i, OT_counter in enumerate(OT_list):
         ot_id = f"OT{i + 1}"  # 0-index
         counter_matrix_w_OT[OT_counter - 1, 0:2] = [ot_id, ot_id]
@@ -1554,7 +1247,8 @@ def add_ot_counters(counter_matrix, OT_counters):
     counter_matrix_w_OT = counter_matrix_w_OT.astype(
         object
     )  # ensure object dtype is changed
-    counter_matrix_w_OT[counter_matrix_w_OT == 0] = "0"  # replace int 0 with '0'
+    counter_matrix_w_OT[
+        counter_matrix_w_OT == 0] = "0"  # replace int 0 with '0'
 
     return counter_matrix_w_OT
 
@@ -1594,12 +1288,12 @@ def generate_statistics(counter_matrix: np.ndarray):
 
 
 def run_algo(
-    main_officers_reported,
-    report_gl_counters,
-    sos_timings,
-    ro_ra_officers,
-    handwritten_counters,
-    OT_counters,
+        main_officers_reported,
+        report_gl_counters,
+        sos_timings,
+        ro_ra_officers,
+        handwritten_counters,
+        OT_counters,
 ):
     main_officers_template = init_main_officers_template()
     main_officers_schedule, reported_officers, valid_ro_ra = (
@@ -1631,7 +1325,9 @@ def run_algo(
             build_officer_schedules(sos_timings)
         )
         print(pre_assigned_counter_dict)
-        all_break_schedules = generate_break_schedules(base_schedules, officer_names)
+        all_break_schedules = generate_break_schedules(
+            base_schedules, officer_names
+        )
         chosen_schedule_indices, best_work_count, min_penalty = (
             greedy_smooth_schedule_beam(
                 base_schedules, None, all_break_schedules, beam_width=20
@@ -1699,9 +1395,13 @@ if __name__ == "__main__":
     )
     print("Results:", results[-1][0])
     # === Show plots ===
-    fig1 = plot_officer_timetable_with_labels(results[0])
-    fig2 = plot_officer_timetable_with_labels(results[1])
-    fig3 = plot_officer_schedule_with_labels(results[2])
+    plotter = Plotter(
+        num_slots=NUM_SLOTS, num_counters=NUM_COUNTERS, start_hour=START_HOUR
+    )
+
+    fig1 = plotter.plot_officer_timetable_with_labels(results[0])
+    fig2 = plotter.plot_officer_timetable_with_labels(results[1])
+    fig3 = plotter.plot_officer_schedule_with_labels(results[2])
 
     # explicitly show them (works in script mode)
     fig1.show()
