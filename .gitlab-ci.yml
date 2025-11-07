@@ -1,0 +1,28 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  AIRBASE_PROJECT_HANDLE: $AIRBASE_PROJECT_HANDLE
+
+build:
+  stage: build
+  script:
+    - echo "Building Airbase container..."
+    - airbase build --env-file $AIRBASE_ENV_LOCAL_FILE
+
+deploy_review:
+  stage: deploy
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - echo "Deploying review environment..."
+    - airbase deploy --env-file $AIRBASE_ENV_LOCAL_FILE --environment $CI_COMMIT_REF_SLUG
+
+deploy_production:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - echo "Deploying to production..."
+    - airbase deploy --env-file $AIRBASE_ENV_LOCAL_FILE --environment default
