@@ -8,8 +8,11 @@ import streamlit as st
 from acroster import Plotter
 from acroster.config import NUM_SLOTS, NUM_COUNTERS, START_HOUR
 from acroster.schedule_manager import ScheduleManager
+from acroster.database import get_db_instance
+from acroster.db_handlers import save_last_inputs, get_last_inputs, save_roster_history
 
 # === Streamlit setup ===
+get_db_instance()
 st.set_page_config(page_title="AC roster Morning", layout="wide")
 st.title("Generate AC roster (Morning)")
 st.markdown(
@@ -62,41 +65,41 @@ def validate_input(value, field_name, required=False):
         return None, f"⚠️ '{field_name}' is a required field."
     return value.strip(), None
 
-
+saved_inputs = get_last_inputs() or {}
 # Main input fields
 main_officers_reported = st.text_input(
     "Main Officers Reported",
-    value="1-18",
+    value=saved_inputs.get('main_officers', '1-18'),
     help="Enter officer numbers (e.g., 1-18 or 1,3,5-10)"
 )
 
 report_gl_counters = st.text_input(
     "GL Counters",
-    value="4AC1, 8AC11, 12AC21, 16AC31",
+    value=saved_inputs.get('gl_counters', '4AC1, 8AC11, 12AC21, 16AC31'),
     help="Ground level counter assignments for officers divisible by 4"
 )
 
 handwritten_counters = st.text_input(
     "Handwritten Counters (30mins only)",
-    value="3AC12,5AC13",
+    value=saved_inputs.get('handwritten_counters', '3AC12,5AC13'),
     help="Manual counter assignments for first 2 slots (e.g., 3AC12)"
 )
 
 OT_counters = st.text_input(
     "OT Counters (30mins only)",
-    value="2,20,40",
+    value=saved_inputs.get('ot_counters', '2,20,40'),
     help="Overtime counter numbers (comma-separated)"
 )
 
 ro_ra_officers = st.text_input(
     "RO/RA Officers",
-    value="3RO2100, 11RO1700,15RO2130",
+    value=saved_inputs.get('ro_ra_officers', '3RO2100, 11RO1700,15RO2130'),
     help="Officers reporting late (RA) or leaving early (RO)"
 )
 
 sos_timings = st.text_area(
     "SOS Timings",
-    value="(AC22)1000-1300, 2000-2200, 1315-1430;2030-2200,1315-1430;2030-2200, (AC23)1000-1130;1315-1430;2030-2200, 1200-2200, 1400-1830, 1400-1830, 1630-1830,1330-2200,1800-2030, 1800-2030, 1730-2200, 1730-1900, 1700-1945",
+    value=saved_inputs.get('sos_timings', '(AC22)1000-1300, 2000-2200, 1315-1430;2030-2200,1315-1430;2030-2200, (AC23)1000-1130;1315-1430;2030-2200, 1200-2200, 1400-1830, 1400-1830, 1630-1830,1330-2200,1800-2030, 1800-2030, 1730-2200, 1730-1900, 1700-1945'),
     height=100,
     help="SOS officer timings (see instructions above)"
 )
@@ -107,7 +110,7 @@ with st.expander("⚙️ Advanced Options"):
         "Beam Search Width",
         min_value=10,
         max_value=100,
-        value=20,
+        value=saved_inputs.get('beam_width', 20),
         help="Higher values may produce better schedules but take longer"
     )
 
@@ -173,6 +176,38 @@ if generate_button:
             if penalty is not None:
                 st.info(f"🎯 Optimization Penalty: {penalty:.2f}")
 
+            # Save inputs for next time
+            save_last_inputs({
+                'main_officers': main_officers_validated,
+                'gl_counters': report_gl_counters.strip(),
+                'handwritten_counters': handwritten_counters.strip(),
+                'ot_counters': OT_counters.strip(),
+                'ro_ra_officers': ro_ra_officers.strip(),
+                'sos_timings': sos_timings.strip(),
+                'beam_width': beam_width
+            })
+
+            # Save to history
+            save_roster_history(
+                inputs={
+                    'main_officers': main_officers_validated,
+                    'gl_counters': report_gl_counters.strip(),
+                    'handwritten_counters': handwritten_counters.strip(),
+                    'ot_counters': OT_counters.strip(),
+                    'ro_ra_officers': ro_ra_officers.strip(),
+                    'sos_timings': sos_timings.strip(),
+                    'beam_width': beam_width
+                },
+                results={
+                    'optimization_penalty': penalty,
+                    'main_officer_count': counts['main'],
+                    'sos_officer_count': counts['sos'],
+                    'ot_officer_count': counts['ot'],
+                    'total_officer_count': counts['total']
+                }
+            )
+
+            
             # Initialize plotter
             plotter = Plotter(
                 num_slots=NUM_SLOTS,
