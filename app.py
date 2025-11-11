@@ -27,7 +27,7 @@ st.markdown(
         border-radius: 8px;
         padding: 10px;
     ">
-<h3>How to input SOS timings</h3>
+<h3>How to inputSOS timings</h3>
 
 1. Different officers are separated by commas `,`.
 2. If an officer has multiple SOS timings, separate them with semicolons `;`.
