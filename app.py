@@ -46,7 +46,7 @@ st.markdown(
 
 <h3>Additional Notes</h3>
 
-- `GL counters` is only applicable for officers in main roster with S/N 2,8,12 ...
+- `GL counters` is only applicable for officers in main roster with S/N `4,8,12` and are not assigned a counter from 1000-1115 ...
 - `Handwritten counters` for `S/N 3` in main roster to `AC12` is written as `3AC12`
 - `RO/RA Officers` for `S/N 11` to `RO` at `1700` is written as `11RO1700`
     </div>
@@ -80,15 +80,15 @@ report_gl_counters = st.text_input(
 )
 
 handwritten_counters = st.text_input(
-    "Handwritten Counters (30mins only)",
+    "Handwritten Counters (1000-1030, 30 minutes only)",
     value=saved_inputs.get('handwritten_counters', '3AC12,5AC13'),
-    help="Manual counter assignments for first 2 slots (e.g., 3AC12)"
+    help="Manual counter allocation by chops room at the start of shift"
 )
 
 OT_counters = st.text_input(
-    "OT Counters (30mins only)",
+    "OT Counters (1000-1030)",
     value=saved_inputs.get('ot_counters', '2,20,40'),
-    help="Overtime counter numbers (comma-separated)"
+    help="insert counter numbers indicated as _OT_ in HOTO list"
 )
 
 ro_ra_officers = st.text_input(
