@@ -191,7 +191,7 @@ class Plotter:
         # Create figure
         fig = go.Figure(data=[heatmap])
         fig.update_layout(
-            title="Officer Timetable",
+            title="Counter Timetable",
             xaxis_title="Time",
             yaxis_title="Counter",
             annotations=annotations,
@@ -370,7 +370,7 @@ class Plotter:
         # Build figure
         fig = go.Figure(data=[heatmap])
         fig.update_layout(
-            title="Officer Timetable (Counter Assignments)",
+            title="Officer Timetable",
             xaxis_title="Time",
             yaxis_title="Officer",
             annotations=annotations,
