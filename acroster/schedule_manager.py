@@ -11,6 +11,7 @@ import numpy as np
 # Import existing classes
 from acroster.officer import MainOfficer, OTOfficer, SOSOfficer
 from acroster.counter import CounterMatrix
+from acroster.config import OperationMode, MODE_CONFIG
 
 
 class ScheduleManager:
@@ -23,8 +24,8 @@ class ScheduleManager:
 
     def __init__(
         self,
+        mode: OperationMode,
         num_slots: int = 48,
-        num_counters: int = 41,
         start_hour: int = 10
     ):
         """
@@ -36,8 +37,12 @@ class ScheduleManager:
             start_hour: Starting hour for the schedule (default: 10 for 10:00 AM)
         """
         self.num_slots = num_slots
-        self.num_counters = num_counters
+        self.mode = mode
         self.start_hour = start_hour
+
+        cfg = MODE_CONFIG[mode]
+        self.num_counters = cfg["num_counters"]
+        self.counter_priority_list = cfg["counter_priority_list"]
 
         # Officer collections
         self.main_officers: Dict[str, MainOfficer] = {}
@@ -53,11 +58,6 @@ class ScheduleManager:
         self.officer_schedules: Optional[Dict[str, List[int]]] = None
         self.statistics: Optional[List[str]] = None
         self.optimization_penalty: Optional[float] = None
-
-        # Configuration
-        self.counter_priority_list = [41] + [
-            n for offset in range(0, 10) for n in range(40 - offset, 0, -10)
-        ]
 
     def run_algorithm(
         self,

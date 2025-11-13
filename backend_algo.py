@@ -11,15 +11,13 @@ import numpy as np
 from acroster.counter import CounterMatrix
 # Import existing classes
 from acroster.officer import Officer, MainOfficer, OTOfficer, SOSOfficer
+from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 
-# Constants
-NUM_SLOTS = 48
-NUM_COUNTERS = 41
-START_HOUR = 10
-counter_priority_list = [41] + [
-    n for offset in range(0, 10) for n in range(40 - offset, 0, -10)
-]
-
+# Choose mode dynamically if you have a variable, or default to ARRIVAL
+MODE = OperationMode.DEPARTURE  # or replace with variable from Streamlit input
+NUM_COUNTERS = MODE_CONFIG[MODE]['num_counters']
+counter_priority_list = MODE_CONFIG[MODE]['counter_priority_list']
+NUM_SLOTS = 48  # still constant
 
 # ===================== TIME CONVERSION UTILITIES =====================
 
@@ -381,9 +379,7 @@ def officers_to_counter_matrix(officers: Dict[str, Officer]) -> CounterMatrix:
     Returns:
         CounterMatrix object with all officer assignments
     """
-    counter_matrix = CounterMatrix(
-        num_counters=NUM_COUNTERS, num_slots=NUM_SLOTS
-    )
+    counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=MODE)
 
     for officer_key, officer in officers.items():
         for slot, counter in enumerate(officer.schedule):

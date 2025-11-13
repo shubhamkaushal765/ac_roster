@@ -6,7 +6,7 @@ Updated to use ScheduleManager class from refactored backend_algo
 import streamlit as st
 
 from acroster import Plotter
-from acroster.config import NUM_SLOTS, NUM_COUNTERS, START_HOUR
+from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 from acroster.schedule_manager import ScheduleManager
 from acroster.database import get_db_instance
 from acroster.db_handlers import save_last_inputs, get_last_inputs, save_roster_history
@@ -67,6 +67,13 @@ def validate_input(value, field_name, required=False):
 
 saved_inputs = get_last_inputs() or {}
 # Main input fields
+
+operation_mode = st.selectbox(
+    "Operation Mode",
+    options=[OperationMode.ARRIVAL.value, OperationMode.DEPARTURE.value],  # ["arrival", "departure"]
+    index=0,
+    help="Select Arrival (41 counters) or Departure (38 counters)"
+)
 main_officers_reported = st.text_input(
     "Main Officers Reported",
     value=saved_inputs.get('main_officers', '1-18'),
@@ -120,6 +127,14 @@ with st.expander("⚙️ Advanced Options"):
         help="Display additional debugging information"
     )
 
+# === update variables based on config.py ===
+
+config = MODE_CONFIG[OperationMode(operation_mode)]
+num_counters = config['num_counters']
+counter_priority_list = config['counter_priority_list']
+description = config['description']
+
+
 # === Generate button ===
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
@@ -142,7 +157,8 @@ if generate_button:
             # Show loading spinner
             with st.spinner("Generating schedule... Please wait."):
                 # ========== NEW: Create ScheduleManager ==========
-                manager = ScheduleManager()
+                manager = ScheduleManager(mode=OperationMode(operation_mode))
+
 
                 # Run the roster algorithm using ScheduleManager
                 results = manager.run_algorithm(
@@ -211,7 +227,7 @@ if generate_button:
             # Initialize plotter
             plotter = Plotter(
                 num_slots=NUM_SLOTS,
-                num_counters=NUM_COUNTERS,
+                num_counters=num_counters,
                 start_hour=START_HOUR
             )
 

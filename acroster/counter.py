@@ -1,11 +1,9 @@
 """
 Counter and CounterMatrix classes for managing counter assignments and officer scheduling.
 """
-
 from typing import List
-
 import numpy as np
-
+from acroster.config import OperationMode, MODE_CONFIG
 
 class Counter:
     """
@@ -15,21 +13,25 @@ class Counter:
     Each slot can contain an officer identifier (e.g., 'M1', 'S2', 'OT3') or '0' for empty.
     """
 
-    def __init__(self, counter_id: int, num_slots: int = 48):
+    def __init__(self, mode: OperationMode, counter_id: int, num_slots: int = 48):
         """
         Initialize a counter.
 
         Args:
-            counter_id: Unique identifier for the counter (1-41)
+            counter_id: Unique identifier for the counter
             num_slots: Number of time slots (default: 48)
+            mode: Operation mode (ARRIVAL or DEPARTURE)
         """
-        if not 1 <= counter_id <= 41:
+        max_counter = MODE_CONFIG[mode]['num_counters']
+        
+        if not 1 <= counter_id <= max_counter:
             raise ValueError(
-                f"Counter ID must be between 1 and 41, got {counter_id}"
+                f"Counter ID must be between 1 and {max_counter} for {mode.value} mode, got {counter_id}"
             )
 
         self.counter_id = counter_id
         self.num_slots = num_slots
+        self.mode = mode
         # Initialize all slots as empty ('0')
         self.slots = np.full(num_slots, "0", dtype=object)
 
@@ -190,20 +192,22 @@ class CounterMatrix:
     assignment, merging, and conversion to/from numpy matrices.
     """
 
-    def __init__(self, num_counters: int = 41, num_slots: int = 48):
+    def __init__(self, mode: OperationMode, num_slots: int = 48):
         """
         Initialize the counter matrix.
 
         Args:
-            num_counters: Number of counters (default: 41)
             num_slots: Number of time slots (default: 48)
+            mode: Operation mode (ARRIVAL or DEPARTURE)
         """
-        self.num_counters = num_counters
+        self.mode = mode
+        self.num_counters = MODE_CONFIG[mode]['num_counters']
         self.num_slots = num_slots
 
-        # Create dictionary of Counter objects (1-indexed: 1 to 41)
+        # Create dictionary of Counter objects (1-indexed)
         self.counters = {
-            i: Counter(i, num_slots) for i in range(1, num_counters + 1)
+            i: Counter(i, num_slots, mode) 
+            for i in range(1, self.num_counters + 1)
         }
 
     def get_counter(self, counter_id: int) -> Counter:
@@ -411,7 +415,7 @@ class CounterMatrix:
             raise ValueError("Cannot merge matrices with different dimensions")
 
         # Create new CounterMatrix
-        merged = CounterMatrix(self.num_counters, self.num_slots)
+        merged = CounterMatrix(num_slots=self.num_slots, mode=self.mode)
 
         # Get matrix representations
         self_matrix = self.to_matrix()
@@ -445,7 +449,7 @@ class CounterMatrix:
         Returns:
             New CounterMatrix with copied data
         """
-        new_matrix = CounterMatrix(self.num_counters, self.num_slots)
+        new_matrix = CounterMatrix(num_slots=self.num_slots, mode=self.mode)
         new_matrix.from_matrix(self.to_matrix())
         return new_matrix
 
@@ -467,21 +471,25 @@ class CounterMatrix:
 
         matrix = self.to_matrix()
 
-        # Count filled slots in first 40 counters
-        count_1_40 = np.sum(matrix[0:40, slot] != "0")
+        # Get zone configuration for this mode
+        cfg = MODE_CONFIG[self.mode]
+        zones = [cfg['zone1'], cfg['zone2'], cfg['zone3'], cfg['zone4']]
+        
+        # Count filled slots in first car counters, e.g all except last counter
+        car_ctr = np.sum(matrix[0::self.num_counters-1, slot] != "0")
 
-        # Count filled in counter 41
-        count_41 = 1 if matrix[40, slot] != "0" else 0
+        # Count filled in motor counter, which is the last counter
+        motor_ctr = 1 if matrix[self.num_counters-1, slot] != "0" else 0
 
         # Count by row groups (1-10, 11-20, 21-30, 31-40)
-        row_groups = [range(0, 10), range(10, 20), range(20, 30),
-                      range(30, 40)]
-        group_counts = [np.sum(matrix[g, slot] != "0") for g in row_groups]
-
+        group_counts = [
+            np.sum(matrix[zone[0]-1:zone[1]-1, slot] != "0") 
+            for zone in zones
+        ]
         return {
-            'total_filled':  count_1_40 + count_41,
-            'counters_1_40': count_1_40,
-            'counter_41':    count_41,
+            'total_filled':  car_ctr + motor_ctr,
+            'car_ctr': car_ctr,
+            'motor_ctr':    motor_ctr,
             'by_row_group':  group_counts
         }
 
