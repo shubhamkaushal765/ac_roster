@@ -1,8 +1,8 @@
 """
 Streamlit web application for AC Roster Generation (Morning Shift)
-Updated to use ScheduleManager class from refactored backend_algo
-"""
 
+"""
+#app.py
 import streamlit as st
 
 from acroster import Plotter
@@ -13,8 +13,8 @@ from acroster.db_handlers import save_last_inputs, get_last_inputs, save_roster_
 
 # === Streamlit setup ===
 get_db_instance()
-st.set_page_config(page_title="AC roster Morning", layout="wide")
-st.title("Generate AC roster (Morning)")
+st.set_page_config(page_title="Generate ACar/DCar Roster Morning", layout="wide")
+st.title("Generate AC/DC roster (Morning)")
 st.markdown(
     "<p style='font-size:14px; color:gray; margin-top:-10px;'>💡 For better display on mobile, please enable <b>Desktop site</b> in your browser settings.</p>",
     unsafe_allow_html=True,
@@ -233,7 +233,7 @@ if generate_button:
 
             # === Display Main Counter Timetable (without SOS) ===
             st.markdown("---")
-            st.subheader("📊 Counter Timetable (Main Officers Only)")
+            st.subheader("📊Timetable (Main Officers Only)")
 
             fig1 = plotter.plot_officer_timetable_with_labels(counter_matrix)
             st.plotly_chart(
@@ -261,7 +261,7 @@ if generate_button:
 
             # === Display Final Counter Timetable (with SOS) ===
             st.markdown("---")
-            st.subheader("📊 Counter Timetable (Including SOS Officers)")
+            st.subheader("📊 Timetable (Including SOS Officers)")
 
             fig2 = plotter.plot_officer_timetable_with_labels(
                 final_counter_matrix

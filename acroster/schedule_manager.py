@@ -4,7 +4,7 @@ ScheduleManager class for orchestrating the officer scheduling algorithm.
 This class serves as the main entry point and coordinator for the scheduling system,
 using existing functions from backend_algo.py
 """
-
+#acroster/schedule_manager.py
 from typing import Dict, List, Tuple, Optional
 import numpy as np
 
@@ -107,7 +107,7 @@ class ScheduleManager:
 
         # Step 1: Generate main officer schedules
         print("Step 1: Generating main officer schedules...")
-        main_officers_template = init_main_officers_template()
+        main_officers_template = init_main_officers_template(self.mode) 
         self.main_officers, reported_officers, valid_ro_ra = generate_main_officers_schedule(
             main_officers_template,
             main_officers_reported,
@@ -115,9 +115,13 @@ class ScheduleManager:
             ro_ra_officers,
         )
 
+        print(f"DEBUG: Main officers created: {list(self.main_officers.keys())}")
+        print(f"DEBUG: Reported officers: {reported_officers}")
+        print(f"DEBUG: Template keys available: {list(main_officers_template.keys())}")
+
         # Step 2: Find empty counters and assign last counters
         print("Step 2: Finding empty counters and assigning last counters...")
-        counter_matrix_wo_last = officers_to_counter_matrix(self.main_officers)
+        counter_matrix_wo_last = officers_to_counter_matrix(self.main_officers, mode = self.mode)
         officer_last_counter, empty_counters_2030 = get_officer_last_counter_and_empty_counters(
             reported_officers, valid_ro_ra, counter_matrix_wo_last
         )
@@ -134,7 +138,7 @@ class ScheduleManager:
 
         # Step 5: Convert main officers to counter matrix
         print("Step 5: Converting to counter matrix...")
-        counter_matrix = officers_to_counter_matrix(self.main_officers)
+        counter_matrix = officers_to_counter_matrix(self.main_officers,mode=self.mode)
 
         # Step 6: Add OT officers
         print("Step 6: Adding OT officers...")
@@ -142,7 +146,7 @@ class ScheduleManager:
             counter_matrix, ot_counters
         )
         main_counter_matrix_np = self.main_counter_matrix.to_matrix()
-        stats1 = generate_statistics(main_counter_matrix_np)
+        stats1 = generate_statistics(main_counter_matrix_np, mode=self.mode)
 
         # Step 7: Handle SOS officers if provided
         if len(sos_timings.strip()) > 0:
@@ -186,19 +190,20 @@ class ScheduleManager:
                 pre_assigned_counter_dict,
                 schedule_intervals_to_officers,
                 self.main_counter_matrix,
+                mode=self.mode
             )
 
             # Merge matrices
             sos_counter_matrix_np = self.sos_counter_matrix.to_matrix()
             final_counter_matrix_np = merge_prefixed_matrices(
-                sos_counter_matrix_np, main_counter_matrix_np
+                main_counter_matrix_np, sos_counter_matrix_np
             )
 
             # Convert to officer schedule format
             self.officer_schedules = counter_to_officer_schedule(final_counter_matrix_np)
 
             # Generate final statistics
-            stats2 = generate_statistics(final_counter_matrix_np)
+            stats2 = generate_statistics(final_counter_matrix_np, mode=self.mode)
             self.statistics = [stats1, stats2]
 
             print("Step 8: Complete! Schedule generated successfully with SOS officers.")

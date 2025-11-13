@@ -39,115 +39,11 @@ def slot_to_hhmm(slot: int) -> str:
 
 # ===================== ROSTER TEMPLATE GENERATION =====================
 
-def add_4main_roster(full_counters):
-    """Generate 4 roster patterns (a, b, c, d) from 3 counter assignments."""
-    a = (
-            [full_counters[0]] * 6
-            + [0] * 2
-            + [full_counters[1]] * 7
-            + [0] * 3
-            + [full_counters[2]] * 9
-            + [0] * 3
-            + [full_counters[0]] * 9
-            + [0]
-            + [full_counters[1]] * 8
-    )
-    b = (
-            [full_counters[1]] * 8
-            + [0] * 2
-            + [full_counters[2]] * 8
-            + [0] * 3
-            + [full_counters[0]] * 9
-            + [0] * 3
-            + [full_counters[1]] * 7
-            + [0]
-            + [full_counters[2]] * 7
-    )
-    c = (
-            [full_counters[2]] * 10
-            + [0] * 2
-            + [full_counters[0]] * 9
-            + [0] * 3
-            + [full_counters[1]] * 9
-            + [0] * 3
-            + [full_counters[2]] * 5
-            + [0]
-            + [0] * 6
-    )
-    d = (
-            [0] * 5
-            + [0] * 1
-            + [full_counters[0]] * 6
-            + [0] * 2
-            + [full_counters[1]] * 10
-            + [0] * 3
-            + [full_counters[2]] * 9
-            + [0] * 3
-            + [full_counters[0]] * 9
-    )
-    return (a, b, c, d)
 
-
-def init_main_officers_template(main_total=24, exclude_main: list = None) -> \
-        Dict[int, np.ndarray]:
-    """Generate roster templates for main officers"""
-    main_officers = {}
-
-    # First 8 officers with predefined patterns
-    main_officers[1] = (
-            [41] * 6 + [0] * 2 + [30] * 7 + [0] * 3 + [20] * 9 + [0] * 3 + [
-        40] * 9 + [0] + [30] * 8
-    )
-    main_officers[2] = (
-            [30] * 8 + [0] * 2 + [20] * 8 + [0] * 3 + [41] * 9 + [0] * 3 + [
-        30] * 7 + [0] + [20] * 7
-    )
-    main_officers[3] = (
-            [20] * 10 + [0] * 2 + [41] * 9 + [0] * 3 + [30] * 9 + [0] * 3 + [
-        20] * 5 + [0] + [0] * 6
-    )
-    main_officers[4] = (
-            [0] * 5 + [0] * 1 + [40] * 6 + [0] * 2 + [30] * 10 + [0] * 3 + [
-        20] * 9 + [0] * 3 + [41] * 9
-    )
-    main_officers[5] = (
-            [40] * 6 + [0] * 2 + [9] * 7 + [0] * 3 + [29] * 9 + [0] * 3 + [
-        41] * 9 + [0] + [9] * 8
-    )
-    main_officers[6] = (
-            [9] * 8 + [0] * 2 + [29] * 8 + [0] * 3 + [40] * 9 + [0] * 3 + [
-        9] * 7 + [0] + [29] * 7
-    )
-    main_officers[7] = (
-            [29] * 10 + [0] * 2 + [40] * 9 + [0] * 3 + [9] * 9 + [0] * 3 + [
-        29] * 5 + [0] + [0] * 6
-    )
-    main_officers[8] = (
-            [0] * 5 + [0] * 1 + [41] * 6 + [0] * 2 + [9] * 10 + [0] * 3 + [
-        29] * 9 + [0] * 3 + [40] * 9
-    )
-
-    # Define groups of officers and their rosters
-    groups = [
-        ([9, 10, 11, 12], [19, 38, 10]),
-        ([13, 14, 15, 16], [28, 17, 39]),
-        ([17, 18, 19, 20], [7, 27, 18]),
-        ([21, 22, 23, 24], [37, 8, 26]),
-        ([25, 26, 27, 28], [15, 35, 5]),
-        ([29, 30, 31, 32], [24, 16, 36]),
-        ([33, 34, 35, 36], [6, 25, 13]),
-        ([37, 38, 39, 40], [34, 3, 23]),
-    ]
-
-    # Generate rosters for grouped officers
-    for m_no, roster in groups:
-        results = add_4main_roster(roster)
-        for i, officer in enumerate(m_no):
-            main_officers[officer] = results[i]
-
-    # Convert to numpy arrays
-    main_officers = {i: np.array(v) for i, v in main_officers.items()}
-    return main_officers
+def init_main_officers_template(mode: OperationMode) -> Dict[int, np.ndarray]:
+    """Get roster templates from config based on mode"""
+    templates = MODE_CONFIG[mode]["roster_templates"]
+    return {i: np.array(v) for i, v in templates.items()}
 
 
 # ===================== MAIN OFFICER GENERATION =====================
@@ -369,7 +265,7 @@ def add_takeover_ot_ctr(
 
 # ===================== OFFICER TO COUNTER MATRIX CONVERSION =====================
 
-def officers_to_counter_matrix(officers: Dict[str, Officer]) -> CounterMatrix:
+def officers_to_counter_matrix(officers: Dict[str, Officer], mode: OperationMode = None) -> CounterMatrix:
     """
     Convert officer schedules to CounterMatrix object.
 
@@ -379,7 +275,7 @@ def officers_to_counter_matrix(officers: Dict[str, Officer]) -> CounterMatrix:
     Returns:
         CounterMatrix object with all officer assignments
     """
-    counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=MODE)
+    counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode if mode is not None else MODE)
 
     for officer_key, officer in officers.items():
         for slot, counter in enumerate(officer.schedule):
@@ -718,7 +614,8 @@ def greedy_smooth_schedule_beam(
 def add_sos_officers(
         pre_assigned_counter_dict: Dict[int, int],
         schedule_intervals_to_officers: Dict[Tuple[int, int], List[int]],
-        main_counter_matrix: CounterMatrix
+        main_counter_matrix: CounterMatrix,
+        mode: OperationMode = None
 ) -> CounterMatrix:
     """
     Assign SOS officers to counters using gap-aware greedy interval packing.
@@ -733,9 +630,7 @@ def add_sos_officers(
     """
     # Create copies for manipulation
     sos_main_counter_matrix = main_counter_matrix.copy()
-    sos_counter_matrix = CounterMatrix(
-        num_counters=NUM_COUNTERS, num_slots=NUM_SLOTS
-    )
+    sos_counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode if mode is not None else MODE)
 
     # Sort intervals by start time, then by end time
     sorted_intervals = sorted(
@@ -927,17 +822,37 @@ def merge_prefixed_matrices(counter_matrix, sos_matrix):
 
 # ===================== STATISTICS GENERATION =====================
 
-def generate_statistics(counter_matrix: np.ndarray):
+def generate_statistics(counter_matrix: np.ndarray, mode: OperationMode = None):
     """Generate manning statistics from counter matrix."""
+    if mode is None:
+        mode = MODE  # fallback to global
+    
     statistics_list = []
     counter_matrix = np.array(counter_matrix)
     num_rows, num_slots = counter_matrix.shape
-
-    row_groups = [range(0, 10), range(10, 20), range(20, 30), range(30, 40)]
+    
+    # Get zone configuration from MODE_CONFIG
+    cfg = MODE_CONFIG[mode]
+    num_counters = cfg['num_counters']
+    num_car_counters = num_counters - 1  # All except motor counter
+    
+    # Get zone ranges from config
+    zone1 = cfg['zone1']
+    zone2 = cfg['zone2']
+    zone3 = cfg['zone3']
+    zone4 = cfg['zone4']
+    
+    row_groups = [
+        range(zone1[0], zone1[1]),
+        range(zone2[0], zone2[1]),
+        range(zone3[0], zone3[1]),
+        range(zone4[0], zone4[1])
+    ]
 
     for slot in range(num_slots):
-        count1 = np.sum(counter_matrix[0:40, slot] != "0")
-        count2 = np.sum(counter_matrix[40:, slot] != "0")
+        # Count car counters (all except last) and motor counter (last)
+        count1 = np.sum(counter_matrix[0:num_car_counters, slot] != "0")
+        count2 = np.sum(counter_matrix[num_car_counters:num_counters, slot] != "0")
         first_line = f"{slot_to_hhmm(slot)}: "
         first_line2 = f"{count1:02d}/{count2:02d}"
 
@@ -955,7 +870,7 @@ def generate_statistics(counter_matrix: np.ndarray):
         elif i % 2 == 0 and t[2] != stats[-1][2]:
             stats.append(t)
 
-    output_text = "ACar \n\n"
+    output_text = f"{cfg['stats_label']} \n\n"
     for stat in stats:
         output_text += f"{stat[0]}{stat[1]}\n{stat[2]}\n\n"
 

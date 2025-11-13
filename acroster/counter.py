@@ -13,7 +13,7 @@ class Counter:
     Each slot can contain an officer identifier (e.g., 'M1', 'S2', 'OT3') or '0' for empty.
     """
 
-    def __init__(self, mode: OperationMode, counter_id: int, num_slots: int = 48):
+    def __init__(self, counter_id: int, num_slots: int = 48, mode: OperationMode = None):
         """
         Initialize a counter.
 
