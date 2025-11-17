@@ -1,0 +1,14 @@
+name: Destroy app on Airbase
+on: workflow_dispatch
+jobs:
+  Airbase-Destroy:
+    runs-on: ubuntu-24.04
+    if: github.ref_name == github.event.repository.default_branch
+    container:
+      image: gdssingapore/airbase:cli
+    steps:
+      - name: Airbase Destroy
+        shell: bash
+        run: |
+          echo "${{ secrets.AIRBASE_RC }}" > ~/.airbaserc
+          airbase container destroy --yes --project "${{ vars.AIRBASE_PROJECT_HANDLE }}"
