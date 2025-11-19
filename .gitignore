@@ -1,5 +1,5 @@
 .venv/
 .idea/
 *.egg-info
-*.db
+
 __pycache__/

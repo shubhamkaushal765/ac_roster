@@ -85,8 +85,8 @@ st.markdown(
 <h3>How to use</h3>
 
 - `GL counters` is only applicable for officers in main roster with S/N `4,8,12 ...` and are not assigned a counter from `1000-1115`.
-- `Handwritten counters` are counters assigned by chops room at the start of the shift, when an officer's original counter on main roster is already occupied (e.g. has OT officer). If `S/N 3` in main roster should report to `AC12` at the start of shift,  key in as `3AC12`.
-- `RO/RA Officers` for `S/N 11` to `RO` at `1700` is written as `11RO1700`.
+- `Handwritten counters` are counters assigned by chops room at the start of the shift as their original counter on main roster is already occupied (e.g. has OT officer). If `S/N 3` in main roster should report to `AC12` at the start of shift,  key in as as `3AC12`
+- `RO/RA Officers` for `S/N 11` to `RO` at `1700` is written as `11RO1700`
     </div>
     """,
     unsafe_allow_html=True,
@@ -167,9 +167,9 @@ Paste the raw text given by Ops Room. The system will automatically extract offi
 Example : `(AC22)1000-1300, 2000-2200, 1315-1430;2030-2200, (AC23)1000-1130;1315-1430;2030-2200, 1200-2200`
 1. Different officers are separated by commas `,`. \n
 2. If an officer has multiple SOS timings, separate them with semicolons `;`. \n
-3. Pre-assigned counters for SOS officers must be enclosed in parentheses `()`.
-   Only valid if the first SOS starts at `1000`. For example, `(AC22)1000-1200`. \n
-4. Time range is in 24-hour `HHMM-HHMM` format.
+3. Optional pre-assigned counters must be enclosed in parentheses `()` before the time.
+   Only valid if the first SOS timing starts at `1000`. \n
+4. Times are in 24-hour `HHMM-HHMM` format.
 </div>
     """,
     unsafe_allow_html=True,
@@ -198,10 +198,10 @@ input_method = st.radio(
 )
 if input_method == "📋 Raw Text (Auto-extract)":
     raw_sos_text = st.text_area(
-        "Paste the SOS timings given by Ops Room here",
+        "Paste the SOS timings msg from Ops Room",
         value=saved_inputs.get('raw_sos_text', example_raw_text),
         height=200,
-        help="Paste the SOS timings message from Ops Room")
+        help="Paste the SOS timings msg from Ops Room")
     
     col1, col2, col3 = st.columns([1, 1, 4])
     with col1:
@@ -321,6 +321,7 @@ if input_method == "📋 Raw Text (Auto-extract)":
             sos_timings_str = ""
     else:
         sos_timings_str = ""
+        
 else:  # Manual Format
     sos_timings = st.text_area(
         "SOS Timings (Manual Format)",
@@ -459,13 +460,24 @@ if generate_button:
                 fig1, use_container_width=True, key="fig_counter_matrix"
             )
 
-            st.text_area(
-                "Counter Manning Statistics",
-                value=output_text[0],
-                height=400,
-                key="stats_text1"
-            )
-
+            # Display statistics in two columns
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.text_area(
+                    "Counter Manning Statistics",
+                    value=output_text[0],
+                    height=400,
+                    key="stats_text1"
+                )
+            with col2:
+                st.download_button(
+                    label="📥 Download Statistics",
+                    data=output_text[0],
+                    file_name="counter_manning_main.txt",
+                    mime="text/plain",
+                    key="download_stats1",
+                    use_container_width=True
+                )
 
             # === Display Final Counter Timetable (with SOS) ===
             st.markdown("---")
@@ -478,12 +490,23 @@ if generate_button:
                 fig2, use_container_width=True, key="fig_counter_matrix_w_SOS"
             )
 
-            st.text_area(
-                "Counter Manning Statistics (with SOS)",
-                value=output_text[1],
-                height=400,
-                key="stats_text2"
-            )
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.text_area(
+                    "Counter Manning Statistics (with SOS)",
+                    value=output_text[1],
+                    height=400,
+                    key="stats_text2"
+                )
+            with col2:
+                st.download_button(
+                    label="📥 Download Statistics",
+                    data=output_text[1],
+                    file_name="counter_manning_with_sos.txt",
+                    mime="text/plain",
+                    key="download_stats2",
+                    use_container_width=True
+                )
 
             # === Display Officer Schedule ===
             st.markdown("---")

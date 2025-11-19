@@ -4,7 +4,7 @@ Counter and CounterMatrix classes for managing counter assignments and officer s
 from typing import List
 import numpy as np
 from acroster.config import OperationMode, MODE_CONFIG
-#acroster/counter.py
+
 class Counter:
     """
     Represents a single counter with its time slot assignments.
