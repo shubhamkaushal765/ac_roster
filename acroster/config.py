@@ -6,6 +6,7 @@ from typing import List
 import numpy as np
 
 def get_morning_main_roster(arr_dep):
+    print(f"DEBUG: get_morning_main_roster called with arr_dep='{arr_dep}'") 
     def add_4main_roster(full_counters):
         """Generate 4 roster patterns (a, b, c, d) from 3 counter assignments."""
         a = (
@@ -54,42 +55,29 @@ def get_morning_main_roster(arr_dep):
         )
         return (a, b, c, d)
 
-    main_officers = {}
-    # First 8 officers with predefined patterns
-    main_officers[1] = (
-            [41] * 6 + [0] * 2 + [30] * 7 + [0] * 3 + [20] * 9 + [0] * 3 + [
-        40] * 9 + [0] + [30] * 8
-    )
-    main_officers[2] = (
-            [30] * 8 + [0] * 2 + [20] * 8 + [0] * 3 + [41] * 9 + [0] * 3 + [
-        30] * 7 + [0] + [20] * 7
-    )
-    main_officers[3] = (
-            [20] * 10 + [0] * 2 + [41] * 9 + [0] * 3 + [30] * 9 + [0] * 3 + [
-        20] * 5 + [0] + [0] * 6
-    )
-    main_officers[4] = (
-            [0] * 5 + [0] * 1 + [40] * 6 + [0] * 2 + [30] * 10 + [0] * 3 + [
-        20] * 9 + [0] * 3 + [41] * 9
-    )
-    main_officers[5] = (
-            [40] * 6 + [0] * 2 + [9] * 7 + [0] * 3 + [29] * 9 + [0] * 3 + [
-        41] * 9 + [0] + [9] * 8
-    )
-    main_officers[6] = (
-            [9] * 8 + [0] * 2 + [29] * 8 + [0] * 3 + [40] * 9 + [0] * 3 + [
-        9] * 7 + [0] + [29] * 7
-    )
-    main_officers[7] = (
-            [29] * 10 + [0] * 2 + [40] * 9 + [0] * 3 + [9] * 9 + [0] * 3 + [
-        29] * 5 + [0] + [0] * 6
-    )
-    main_officers[8] = (
-            [0] * 5 + [0] * 1 + [41] * 6 + [0] * 2 + [9] * 10 + [0] * 3 + [
-        29] * 9 + [0] * 3 + [40] * 9
-    )
+    def convert_counter(counter_num):
+        """Convert arrival counter to departure counter."""
+        if counter_num == 0:
+            return 0
+        elif 1 <= counter_num <= 30:
+            return counter_num - 2
+        elif 31 <= counter_num <= 41:
+            return counter_num - 4
+        else:
+            raise ValueError(f"Invalid counter number: {counter_num}")
 
-    # Define groups of officers and their rosters
+    # Define base roster structure (always in arrival mode format)
+    base_structure = {
+        1: [41, 30, 20, 40, 30],
+        2: [30, 20, 41, 30, 20],
+        3: [20, 41, 30, 20],
+        4: [40, 30, 20, 41],
+        5: [40, 9, 29, 41, 9],
+        6: [9, 29, 40, 9, 29],
+        7: [29, 40, 9, 29],
+        8: [41, 9, 29, 40],
+    }
+    
     groups = [
         ([9, 10, 11, 12], [19, 38, 10]),
         ([13, 14, 15, 16], [28, 17, 39]),
@@ -101,6 +89,42 @@ def get_morning_main_roster(arr_dep):
         ([37, 38, 39, 40], [34, 3, 23]),
     ]
 
+    main_officers = {}
+    
+    # First 8 officers with predefined patterns
+    main_officers[1] = (
+            [41] * 6 + [0] * 2 + [30] * 7 + [0] * 3 + [20] * 9 + [0] * 3 + 
+            [40] * 9 + [0] + [30] * 8
+    )
+    main_officers[2] = (
+            [30] * 8 + [0] * 2 + [20] * 8 + [0] * 3 + [41] * 9 + [0] * 3 + 
+            [30] * 7 + [0] + [20] * 7
+    )
+    main_officers[3] = (
+            [20] * 10 + [0] * 2 + [41] * 9 + [0] * 3 + [30] * 9 + [0] * 3 + 
+            [20] * 5 + [0] + [0] * 6
+    )
+    main_officers[4] = (
+            [0] * 5 + [0] * 1 + [40] * 6 + [0] * 2 + [30] * 10 + [0] * 3 + 
+            [20] * 9 + [0] * 3 + [41] * 9
+    )
+    main_officers[5] = (
+            [40] * 6 + [0] * 2 + [9] * 7 + [0] * 3 + [29] * 9 + [0] * 3 + 
+            [41] * 9 + [0] + [9] * 8
+    )
+    main_officers[6] = (
+            [9] * 8 + [0] * 2 + [29] * 8 + [0] * 3 + [40] * 9 + [0] * 3 + 
+            [9] * 7 + [0] + [29] * 7
+    )
+    main_officers[7] = (
+            [29] * 10 + [0] * 2 + [40] * 9 + [0] * 3 + [9] * 9 + [0] * 3 + 
+            [29] * 5 + [0] + [0] * 6
+    )
+    main_officers[8] = (
+            [0] * 5 + [0] * 1 + [41] * 6 + [0] * 2 + [9] * 10 + [0] * 3 + 
+            [29] * 9 + [0] * 3 + [40] * 9
+    )
+
     # Generate rosters for grouped officers
     for m_no, roster in groups:
         results = add_4main_roster(roster)
@@ -109,18 +133,18 @@ def get_morning_main_roster(arr_dep):
 
     # Convert to numpy arrays
     main_officers = {i: np.array(v) for i, v in main_officers.items()}
-    if arr_dep == 'arr':
-        return main_officers
-    else:
+    
+    # If departure mode, convert all counters
+    if arr_dep == 'dep':
+        print(f"DEBUG: Converting {len(main_officers)} officers to departure mode") 
         main_officers_dep = {}
-
         for officer_id, arr_roster in main_officers.items():
-            arr = np.array(arr_roster)
-            dep = np.where((arr >= 1) & (arr <= 30), arr - 2,
-                np.where((arr >= 31) & (arr <= 41), arr - 4, arr))
-            main_officers_dep[officer_id] = dep
+            # Vectorized conversion
+            dep_roster = np.vectorize(convert_counter)(arr_roster)
+            main_officers_dep[officer_id] = dep_roster
         return main_officers_dep
-
+    else:
+        return main_officers
 
 class OperationMode(Enum):
     """Operation modes for the roster system"""

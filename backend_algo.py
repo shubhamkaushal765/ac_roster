@@ -15,11 +15,8 @@ from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 
 # Constants
 NUM_SLOTS = 48
-NUM_COUNTERS = 41
 START_HOUR = 10
-counter_priority_list = [41] + [
-    n for offset in range(0, 10) for n in range(40 - offset, 0, -10)
-]
+
 
 
 # ===================== TIME CONVERSION UTILITIES =====================
@@ -117,67 +114,10 @@ def add_4main_roster(full_counters):
     return (a, b, c, d)
 
 
-def init_main_officers_template(main_total=24, exclude_main: list = None) -> \
-        Dict[int, np.ndarray]:
-    """Generate roster templates for main officers"""
-    main_officers = {}
-
-    # First 8 officers with predefined patterns
-    main_officers[1] = (
-            [41] * 6 + [0] * 2 + [30] * 7 + [0] * 3 + [20] * 9 + [0] * 3 + [
-        40] * 9 + [0] + [30] * 8
-    )
-    main_officers[2] = (
-            [30] * 8 + [0] * 2 + [20] * 8 + [0] * 3 + [41] * 9 + [0] * 3 + [
-        30] * 7 + [0] + [20] * 7
-    )
-    main_officers[3] = (
-            [20] * 10 + [0] * 2 + [41] * 9 + [0] * 3 + [30] * 9 + [0] * 3 + [
-        20] * 5 + [0] + [0] * 6
-    )
-    main_officers[4] = (
-            [0] * 5 + [0] * 1 + [40] * 6 + [0] * 2 + [30] * 10 + [0] * 3 + [
-        20] * 9 + [0] * 3 + [41] * 9
-    )
-    main_officers[5] = (
-            [40] * 6 + [0] * 2 + [9] * 7 + [0] * 3 + [29] * 9 + [0] * 3 + [
-        41] * 9 + [0] + [9] * 8
-    )
-    main_officers[6] = (
-            [9] * 8 + [0] * 2 + [29] * 8 + [0] * 3 + [40] * 9 + [0] * 3 + [
-        9] * 7 + [0] + [29] * 7
-    )
-    main_officers[7] = (
-            [29] * 10 + [0] * 2 + [40] * 9 + [0] * 3 + [9] * 9 + [0] * 3 + [
-        29] * 5 + [0] + [0] * 6
-    )
-    main_officers[8] = (
-            [0] * 5 + [0] * 1 + [41] * 6 + [0] * 2 + [9] * 10 + [0] * 3 + [
-        29] * 9 + [0] * 3 + [40] * 9
-    )
-
-    # Define groups of officers and their rosters
-    groups = [
-        ([9, 10, 11, 12], [19, 38, 10]),
-        ([13, 14, 15, 16], [28, 17, 39]),
-        ([17, 18, 19, 20], [7, 27, 18]),
-        ([21, 22, 23, 24], [37, 8, 26]),
-        ([25, 26, 27, 28], [15, 35, 5]),
-        ([29, 30, 31, 32], [24, 16, 36]),
-        ([33, 34, 35, 36], [6, 25, 13]),
-        ([37, 38, 39, 40], [34, 3, 23]),
-    ]
-
-    # Generate rosters for grouped officers
-    for m_no, roster in groups:
-        results = add_4main_roster(roster)
-        for i, officer in enumerate(m_no):
-            main_officers[officer] = results[i]
-
-    # Convert to numpy arrays
-    main_officers = {i: np.array(v) for i, v in main_officers.items()}
-    return main_officers
-
+def init_main_officers_template(mode: OperationMode) -> Dict[int, np.ndarray]:
+    """Get roster templates from config based on mode"""
+    templates = MODE_CONFIG[mode]["roster_templates"]
+    return {i: np.array(v) for i, v in templates.items()}
 
 # ===================== MAIN OFFICER GENERATION =====================
 
@@ -311,7 +251,7 @@ def generate_main_officers_schedule(
 def get_officer_last_counter_and_empty_counters(
         reported_officers: set,
         ro_ra_officers: List[Tuple],
-        counter_matrix: CounterMatrix
+        counter_matrix: CounterMatrix, mode: OperationMode
 ) -> Tuple[Dict[int, int], List[int]]:
     """
     Compute each officer's last counter start slot and find counters empty from slot 42 onward.
@@ -325,6 +265,9 @@ def get_officer_last_counter_and_empty_counters(
         - Dict mapping officer_id to last counter end slot
         - List of counter IDs empty from slot 42 onwards (sorted by priority)
     """
+    cfg = MODE_CONFIG[mode]
+    num_counters = cfg['num_counters']
+    counter_priority_list = cfg['counter_priority_list']
     officer_last_counter = {}
 
     # Step 1: Assign last counter start slots for eligible officers
@@ -342,7 +285,7 @@ def get_officer_last_counter_and_empty_counters(
 
     # Step 2: Identify counters empty from slot 42 onwards
     empty_counters_2030 = []
-    for counter_id in range(1, NUM_COUNTERS + 1):
+    for counter_id in range(1, num_counters + 1):
         counter = counter_matrix.get_counter(counter_id)
         if counter.is_empty(42, NUM_SLOTS - 1):
             empty_counters_2030.append(counter_id)
@@ -823,6 +766,9 @@ def add_sos_officers(
     # Create copies for manipulation
     sos_main_counter_matrix = main_counter_matrix.copy()
     sos_counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode if mode is not None else MODE)
+    cfg = MODE_CONFIG[mode]
+    num_counters = cfg['num_counters']
+    counter_priority_list = cfg['counter_priority_list']
 
     # Sort intervals by start time, then by end time
     sorted_intervals = sorted(
@@ -914,7 +860,7 @@ def add_sos_officers(
 
     print("\nAssignment Statistics:")
     print(f"  Partial counters at end: {len(final_partial)}")
-    print(f"  Total counters used for SOS: {used_counters}/{NUM_COUNTERS}")
+    print(f"  Total counters used for SOS: {used_counters}/{num_counters}")
 
     return sos_counter_matrix
 

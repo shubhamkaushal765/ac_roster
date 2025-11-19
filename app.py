@@ -460,24 +460,13 @@ if generate_button:
                 fig1, use_container_width=True, key="fig_counter_matrix"
             )
 
-            # Display statistics in two columns
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.text_area(
-                    "Counter Manning Statistics",
-                    value=output_text[0],
-                    height=400,
-                    key="stats_text1"
-                )
-            with col2:
-                st.download_button(
-                    label="📥 Download Statistics",
-                    data=output_text[0],
-                    file_name="counter_manning_main.txt",
-                    mime="text/plain",
-                    key="download_stats1",
-                    use_container_width=True
-                )
+            st.text_area(
+                "Counter Manning Statistics",
+                value=output_text[0],
+                height=400,
+                key="stats_text1"
+            )
+
 
             # === Display Final Counter Timetable (with SOS) ===
             st.markdown("---")
@@ -490,23 +479,12 @@ if generate_button:
                 fig2, use_container_width=True, key="fig_counter_matrix_w_SOS"
             )
 
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.text_area(
-                    "Counter Manning Statistics (with SOS)",
-                    value=output_text[1],
-                    height=400,
-                    key="stats_text2"
-                )
-            with col2:
-                st.download_button(
-                    label="📥 Download Statistics",
-                    data=output_text[1],
-                    file_name="counter_manning_with_sos.txt",
-                    mime="text/plain",
-                    key="download_stats2",
-                    use_container_width=True
-                )
+            st.text_area(
+                "Counter Manning Statistics (with SOS)",
+                value=output_text[1],
+                height=400,
+                key="stats_text2"
+            )
 
             # === Display Officer Schedule ===
             st.markdown("---")

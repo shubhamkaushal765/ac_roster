@@ -118,12 +118,18 @@ class ScheduleManager:
         print(f"DEBUG: Main officers created: {list(self.main_officers.keys())}")
         print(f"DEBUG: Reported officers: {reported_officers}")
         print(f"DEBUG: Template keys available: {list(main_officers_template.keys())}")
-
+        print(f"\nDEBUG: Checking template for invalid counters (max: {self.num_counters})...")
+        for officer_id, roster in main_officers_template.items():
+            unique_counters = np.unique(roster[roster > 0])
+            invalid_counters = unique_counters[unique_counters > self.num_counters]
+            if len(invalid_counters) > 0:
+                print(f"❌ Officer {officer_id} has invalid counters: {invalid_counters}")
+                print(f"   Full roster: {roster}")
         # Step 2: Find empty counters and assign last counters
         print("Step 2: Finding empty counters and assigning last counters...")
         counter_matrix_wo_last = officers_to_counter_matrix(self.main_officers, mode = self.mode)
         officer_last_counter, empty_counters_2030 = get_officer_last_counter_and_empty_counters(
-            reported_officers, valid_ro_ra, counter_matrix_wo_last
+            reported_officers, valid_ro_ra, counter_matrix_wo_last, mode = self.mode
         )
 
         # Step 3: Apply last counters to main officers
