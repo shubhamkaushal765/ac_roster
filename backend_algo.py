@@ -13,19 +13,48 @@ from acroster.counter import CounterMatrix
 from acroster.officer import Officer, MainOfficer, OTOfficer, SOSOfficer
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 
-# Choose mode dynamically if you have a variable, or default to ARRIVAL
-MODE = OperationMode.DEPARTURE  # or replace with variable from Streamlit input
-NUM_COUNTERS = MODE_CONFIG[MODE]['num_counters']
-counter_priority_list = MODE_CONFIG[MODE]['counter_priority_list']
-NUM_SLOTS = 48  # still constant
+# Constants
+NUM_SLOTS = 48
+NUM_COUNTERS = 41
+START_HOUR = 10
+counter_priority_list = [41] + [
+    n for offset in range(0, 10) for n in range(40 - offset, 0, -10)
+]
+
 
 # ===================== TIME CONVERSION UTILITIES =====================
 
 def hhmm_to_slot(hhmm: str) -> int:
-    """Convert hhmm string to a slot index (0–47)."""
+    """
+    Convert hhmm string to a slot index (0–47).
+    
+    Args:
+        hhmm: Time string in HHMM format (e.g., '0800', '1430')
+    
+    Returns:
+        Slot index (0-47)
+    
+    Raises:
+        ValueError: If hhmm is empty or invalid format
+    """
+    hhmm = hhmm.strip()
+    
+    if not hhmm:
+        raise ValueError("Time string cannot be empty")
+    
+    if not hhmm.isdigit():
+        raise ValueError(f"Time string '{hhmm}' must contain only digits")
+    
     t = int(hhmm)
     h = t // 100
     m = t % 100
+    
+    # Validate hours and minutes
+    if h < 0 or h > 23:
+        raise ValueError(f"Invalid hour: {h} in time '{hhmm}'")
+    if m < 0 or m > 59:
+        raise ValueError(f"Invalid minute: {m} in time '{hhmm}'")
+    
     slot = (h - START_HOUR) * 4 + (m // 15)
     return max(0, min(NUM_SLOTS - 1, slot))
 
@@ -39,11 +68,115 @@ def slot_to_hhmm(slot: int) -> str:
 
 # ===================== ROSTER TEMPLATE GENERATION =====================
 
+def add_4main_roster(full_counters):
+    """Generate 4 roster patterns (a, b, c, d) from 3 counter assignments."""
+    a = (
+            [full_counters[0]] * 6
+            + [0] * 2
+            + [full_counters[1]] * 7
+            + [0] * 3
+            + [full_counters[2]] * 9
+            + [0] * 3
+            + [full_counters[0]] * 9
+            + [0]
+            + [full_counters[1]] * 8
+    )
+    b = (
+            [full_counters[1]] * 8
+            + [0] * 2
+            + [full_counters[2]] * 8
+            + [0] * 3
+            + [full_counters[0]] * 9
+            + [0] * 3
+            + [full_counters[1]] * 7
+            + [0]
+            + [full_counters[2]] * 7
+    )
+    c = (
+            [full_counters[2]] * 10
+            + [0] * 2
+            + [full_counters[0]] * 9
+            + [0] * 3
+            + [full_counters[1]] * 9
+            + [0] * 3
+            + [full_counters[2]] * 5
+            + [0]
+            + [0] * 6
+    )
+    d = (
+            [0] * 5
+            + [0] * 1
+            + [full_counters[0]] * 6
+            + [0] * 2
+            + [full_counters[1]] * 10
+            + [0] * 3
+            + [full_counters[2]] * 9
+            + [0] * 3
+            + [full_counters[0]] * 9
+    )
+    return (a, b, c, d)
 
-def init_main_officers_template(mode: OperationMode) -> Dict[int, np.ndarray]:
-    """Get roster templates from config based on mode"""
-    templates = MODE_CONFIG[mode]["roster_templates"]
-    return {i: np.array(v) for i, v in templates.items()}
+
+def init_main_officers_template(main_total=24, exclude_main: list = None) -> \
+        Dict[int, np.ndarray]:
+    """Generate roster templates for main officers"""
+    main_officers = {}
+
+    # First 8 officers with predefined patterns
+    main_officers[1] = (
+            [41] * 6 + [0] * 2 + [30] * 7 + [0] * 3 + [20] * 9 + [0] * 3 + [
+        40] * 9 + [0] + [30] * 8
+    )
+    main_officers[2] = (
+            [30] * 8 + [0] * 2 + [20] * 8 + [0] * 3 + [41] * 9 + [0] * 3 + [
+        30] * 7 + [0] + [20] * 7
+    )
+    main_officers[3] = (
+            [20] * 10 + [0] * 2 + [41] * 9 + [0] * 3 + [30] * 9 + [0] * 3 + [
+        20] * 5 + [0] + [0] * 6
+    )
+    main_officers[4] = (
+            [0] * 5 + [0] * 1 + [40] * 6 + [0] * 2 + [30] * 10 + [0] * 3 + [
+        20] * 9 + [0] * 3 + [41] * 9
+    )
+    main_officers[5] = (
+            [40] * 6 + [0] * 2 + [9] * 7 + [0] * 3 + [29] * 9 + [0] * 3 + [
+        41] * 9 + [0] + [9] * 8
+    )
+    main_officers[6] = (
+            [9] * 8 + [0] * 2 + [29] * 8 + [0] * 3 + [40] * 9 + [0] * 3 + [
+        9] * 7 + [0] + [29] * 7
+    )
+    main_officers[7] = (
+            [29] * 10 + [0] * 2 + [40] * 9 + [0] * 3 + [9] * 9 + [0] * 3 + [
+        29] * 5 + [0] + [0] * 6
+    )
+    main_officers[8] = (
+            [0] * 5 + [0] * 1 + [41] * 6 + [0] * 2 + [9] * 10 + [0] * 3 + [
+        29] * 9 + [0] * 3 + [40] * 9
+    )
+
+    # Define groups of officers and their rosters
+    groups = [
+        ([9, 10, 11, 12], [19, 38, 10]),
+        ([13, 14, 15, 16], [28, 17, 39]),
+        ([17, 18, 19, 20], [7, 27, 18]),
+        ([21, 22, 23, 24], [37, 8, 26]),
+        ([25, 26, 27, 28], [15, 35, 5]),
+        ([29, 30, 31, 32], [24, 16, 36]),
+        ([33, 34, 35, 36], [6, 25, 13]),
+        ([37, 38, 39, 40], [34, 3, 23]),
+    ]
+
+    # Generate rosters for grouped officers
+    for m_no, roster in groups:
+        results = add_4main_roster(roster)
+        for i, officer in enumerate(m_no):
+            main_officers[officer] = results[i]
+
+    # Convert to numpy arrays
+    main_officers = {i: np.array(v) for i, v in main_officers.items()}
+    return main_officers
 
 
 # ===================== MAIN OFFICER GENERATION =====================
@@ -309,15 +442,43 @@ def officer_to_counter_matrix(officers: Dict[str, Officer]) -> np.ndarray:
 def parse_availability(avail_str: str) -> np.ndarray:
     """Convert availability string into binary numpy array."""
     schedule = np.zeros(NUM_SLOTS, dtype=int)
-
-    for rng in avail_str.split(","):
-        start, end = rng.split("-")
-        start_slot = hhmm_to_slot(start)
-        end_slot = hhmm_to_slot(end)
-        schedule[start_slot: end_slot + 1] = 1
-
+    
+    # Support both semicolon and comma separators
+    separator = ';' if ';' in avail_str else ','
+    
+    for rng in avail_str.split(separator):
+        rng = rng.strip()
+        
+        # Skip empty ranges
+        if not rng:
+            continue
+        
+        # Validate format
+        if '-' not in rng:
+            print(f"Warning: Invalid range format '{rng}' - missing hyphen, skipping")
+            continue
+        
+        parts = rng.split("-")
+        if len(parts) != 2:
+            print(f"Warning: Invalid range format '{rng}' - too many hyphens, skipping")
+            continue
+        
+        start, end = parts[0].strip(), parts[1].strip()
+        
+        # Skip if either time is empty
+        if not start or not end:
+            print(f"Warning: Empty time value in range '{rng}', skipping")
+            continue
+        
+        try:
+            start_slot = hhmm_to_slot(start)
+            end_slot = hhmm_to_slot(end)
+            schedule[start_slot: end_slot + 1] = 1
+        except ValueError as e:
+            print(f"Warning: Could not parse range '{rng}': {e}")
+            continue
+    
     return schedule
-
 
 def convert_input(user_input: str):
     """Convert user input string to list of availability strings."""
@@ -331,6 +492,37 @@ def convert_input(user_input: str):
 
     return result
 
+def convert_input(extracted_data) -> list:
+    """
+    Convert extracted officer timing data to list of availability strings.
+    
+    Args:
+        extracted_data: Comma-separated string like "1000-1300, 2000-2200, 1315-1430;2030-2200"
+                       (from either manual input or auto-extracted format)
+    
+    Returns:
+        List of timing strings for each officer
+    """
+    # Handle comma-separated string input (both manual and auto-extracted)
+    if isinstance(extracted_data, str):
+        # Split by comma to get individual officer timings
+        timings = [timing.strip() for timing in extracted_data.split(',') if timing.strip()]
+        return timings
+    
+    # Fallback: Handle list input (in case format changes in future)
+    result = []
+    for item in extracted_data:
+        if isinstance(item, dict):
+            timing = item.get('timing', '').strip()
+        elif isinstance(item, str):
+            timing = item.strip()
+        else:
+            timing = ''
+        
+        if timing:
+            result.append(timing)
+    
+    return result
 
 def build_officer_schedules(user_input: str) -> Tuple[
     List[SOSOfficer], Dict[int, int]]:
@@ -835,7 +1027,6 @@ def generate_statistics(counter_matrix: np.ndarray, mode: OperationMode = None):
     cfg = MODE_CONFIG[mode]
     num_counters = cfg['num_counters']
     num_car_counters = num_counters - 1  # All except motor counter
-    
     # Get zone ranges from config
     zone1 = cfg['zone1']
     zone2 = cfg['zone2']
