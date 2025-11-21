@@ -239,6 +239,112 @@ class ScheduleManager:
                 self.statistics,
             )
 
+    def add_sos_to_existing_schedule(
+    self,
+    sos_timings: str,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, List[int]], List[str]]:
+        """
+        Add SOS officers to an existing schedule incrementally.
+        Uses the current main_counter_matrix as the base.
+        
+        Args:
+            sos_timings: SOS officer timing specifications
+        
+        Returns:
+            Same as run_algorithm()
+        """
+        from backend_algo import (
+            build_officer_schedules,
+            generate_break_schedules,
+            greedy_smooth_schedule_beam,
+            add_sos_officers,
+            merge_prefixed_matrices,
+            counter_to_officer_schedule,
+            generate_statistics,
+        )
+        
+        if len(sos_timings.strip()) == 0:
+            raise ValueError("SOS timings cannot be empty")
+        
+        if self.main_counter_matrix is None:
+            raise ValueError("No base schedule exists. Run run_algorithm first.")
+        
+        print("Adding SOS officers to existing schedule...")
+        
+        # Build SOS officer schedules
+        print("  - Building SOS officer schedules...")
+        new_sos_officers, pre_assigned_counter_dict = build_officer_schedules(
+            sos_timings
+        )
+        
+        # Append to existing SOS officers
+        self.sos_officers.extend(new_sos_officers)
+        
+        # Generate break schedules for new officers
+        print("  - Generating break schedules...")
+        new_sos_officers = generate_break_schedules(new_sos_officers)
+        
+        # Optimize schedule selection (use ALL sos officers, not just new ones)
+        print("  - Optimizing schedule selection...")
+        chosen_schedule_indices, best_work_count, min_penalty = greedy_smooth_schedule_beam(
+            self.sos_officers, self.main_officers, beam_width=20
+        )
+        self.optimization_penalty = min_penalty
+        print(f"  - Optimization penalty: {min_penalty}")
+        
+        # Get working intervals for ALL SOS officers
+        schedule_intervals_to_officers = {}
+        for officer in self.sos_officers:
+            intervals = officer.get_working_intervals()
+            for interval in intervals:
+                if interval not in schedule_intervals_to_officers:
+                    schedule_intervals_to_officers[interval] = []
+                schedule_intervals_to_officers[interval].append(
+                    officer.officer_id - 1
+                )
+        
+        print(f"  - Best work count: {best_work_count}")
+        print(f"  - Schedule intervals: {len(schedule_intervals_to_officers)} intervals")
+        
+        # Rebuild pre_assigned_counter_dict for ALL officers
+        all_pre_assigned = {}
+        for officer in self.sos_officers:
+            if officer.pre_assigned_counter:
+                all_pre_assigned[officer.officer_id] = officer.pre_assigned_counter
+        
+        # Add SOS officers to counter matrix
+        print("  - Adding SOS officers to counter matrix...")
+        self.sos_counter_matrix = add_sos_officers(
+            all_pre_assigned,
+            schedule_intervals_to_officers,
+            self.main_counter_matrix,
+            mode=self.mode
+        )
+        
+        # Merge matrices
+        main_counter_matrix_np = self.main_counter_matrix.to_matrix()
+        sos_counter_matrix_np = self.sos_counter_matrix.to_matrix()
+        final_counter_matrix_np = merge_prefixed_matrices(
+            main_counter_matrix_np, sos_counter_matrix_np
+        )
+        
+        # Convert to officer schedule format
+        self.officer_schedules = counter_to_officer_schedule(final_counter_matrix_np)
+        
+        # Generate statistics
+        stats1 = generate_statistics(main_counter_matrix_np, mode=self.mode)
+        stats2 = generate_statistics(final_counter_matrix_np, mode=self.mode)
+        self.statistics = [stats1, stats2]
+        
+        print("Complete! SOS officers added successfully.")
+
+        return (
+            main_counter_matrix_np,
+            final_counter_matrix_np,
+            self.officer_schedules,
+            self.statistics,
+        )
+
     def get_main_officers(self) -> Dict[str, MainOfficer]:
         """
         Get all main officer objects.
