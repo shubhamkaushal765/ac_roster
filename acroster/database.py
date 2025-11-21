@@ -3,10 +3,11 @@ acroster/database.py
 SQLAlchemy Database Setup for AC Roster Application
 """
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, CheckConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Text, CheckConstraint, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
+import json
 
 Base = declarative_base()
 
@@ -44,8 +45,27 @@ class LastInputs(Base):
     ot_counters = Column(Text)
     ro_ra_officers = Column(Text)
     sos_timings = Column(Text)
+    raw_sos_text = Column(Text)
     beam_width = Column(Integer, default=20)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RosterEdit(Base):
+    """Table for storing roster edit operations"""
+    __tablename__ = 'roster_edits'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    roster_history_id = Column(Integer)  # Links to RosterHistory if needed
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    edit_type = Column(String(20), nullable=False)  # 'delete', 'swap', 'add'
+    officer_id = Column(String(50))  # Primary officer involved
+    officer_id_2 = Column(String(50))  # Second officer (for swap operations)
+    counter_no = Column(Integer)  # Counter number (for add operations)
+    slot_start = Column(Integer, nullable=False)  # Starting time slot (0-47)
+    slot_end = Column(Integer, nullable=False)  # Ending time slot (0-47)
+    time_start = Column(String(10))  # Human-readable start time (e.g., "10:00")
+    time_end = Column(String(10))  # Human-readable end time (e.g., "10:45")
+    notes = Column(Text)  # Additional notes or description
 
 
 class Database:
