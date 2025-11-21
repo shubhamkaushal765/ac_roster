@@ -16,7 +16,11 @@ from acroster.db_handlers import (
     save_last_inputs, get_last_inputs, save_roster_history,
     save_roster_edit, get_roster_edits
 )
+from backend_algo import hhmm_to_slot, slot_to_hhmm, generate_time_slots
 
+def get_slot_end_time(slot_idx: int) -> str:
+    """Get the end time of a slot (start time + 15 minutes)"""
+    return slot_to_hhmm(slot_idx + 1)
 # === Raw Text Extraction Functions ===
 def clean_time(t):
     """Cleans timing text by removing 'ish' and spaces."""
@@ -71,14 +75,10 @@ def extract_officer_timings(full_text):
     return final_records
 
 # === Roster Editor Helper Functions ===
-def time_to_slot(time_str: str) -> int:
-    """Convert time string (HH:MM) to slot index (0-47)"""
-    time_slots = [f"{i//4:02d}:{(i%4)*15:02d}" for i in range(48)]
-    return time_slots.index(time_str)
-
-def slot_to_time(slot_idx: int) -> str:
-    """Convert slot index to time string"""
-    return f"{slot_idx//4:02d}:{(slot_idx%4)*15:02d}"
+# def time_to_slot(time_str: str) -> int:
+#     """Convert time string (HH:MM) to slot index (0-47)"""
+#     time_slots = [f"{i//4:02d}:{(i%4)*15:02d}" for i in range(48)]
+#     return time_slots.index(time_str)
 
 def get_all_officer_ids(officer_schedule: dict) -> list:
     """Extract all officer IDs from the schedule"""
@@ -138,25 +138,34 @@ with st.sidebar:
     st.subheader("📝 Edit History")
     if st.session_state['edit_history']:
         for i, edit_entry in enumerate(reversed(st.session_state['edit_history'][-20:]), 1):
+            # Handle legacy string format (backwards compatibility)
+            if isinstance(edit_entry, str):
+                description = edit_entry
+                is_legacy = True
+            else:
+                description = edit_entry.get('description', 'Unknown edit')
+                is_legacy = False
+            
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.text(f"{len(st.session_state['edit_history']) - i + 1}. {edit_entry['description']}")
+                st.text(f"{len(st.session_state['edit_history']) - i + 1}. {description}")
             with col2:
-                # Delete button instead of edit button
-                if st.button("🗑️", key=f"delete_btn_{len(st.session_state['edit_history']) - i}", help="Delete this entry"):
-                    if edit_entry['type'] == 'initialize':
-                        # Delete initialization = clear all fields and reset
-                        st.session_state['confirm_reset'] = True
-                        st.session_state['reset_index'] = len(st.session_state['edit_history']) - i
-                    else:
-                        # Delete this specific edit and revert
-                        st.session_state['confirm_delete'] = True
-                        st.session_state['delete_index'] = len(st.session_state['edit_history']) - i
-                        st.session_state['delete_entry'] = edit_entry
-    else:
-        st.info("No history yet. Generate a schedule to begin.")
-    
-    st.divider()
+                if not is_legacy:  # Only show delete button for new format
+                    # Delete button
+                    if st.button("🗑️", key=f"delete_btn_{len(st.session_state['edit_history']) - i}", help="Delete this entry"):
+                        if edit_entry.get('type') == 'initialize':
+                            # Delete initialization = clear all fields and reset
+                            st.session_state['confirm_reset'] = True
+                            st.session_state['reset_index'] = len(st.session_state['edit_history']) - i
+                        else:
+                            # Delete this specific edit and revert
+                            st.session_state['confirm_delete'] = True
+                            st.session_state['delete_index'] = len(st.session_state['edit_history']) - i
+                            st.session_state['delete_entry'] = edit_entry
+        else:
+            st.info("No history yet. Generate a schedule to begin.")
+        
+        st.divider()
     
     # Quick stats if schedule exists
     if 'generated_schedule' in st.session_state:
@@ -226,7 +235,7 @@ if st.session_state.get('confirm_delete', False):
             st.session_state['delete_index'] = None
             st.session_state['delete_entry'] = None
             st.rerun()
-                 
+
 # === User Inputs ===
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -608,9 +617,9 @@ if 'generated_schedule' in st.session_state and st.session_state['generated_sche
         st.session_state['edit_history'] = []
     
     officer_schedule = st.session_state['edited_schedule']
-    officer_ids = get_all_officer_ids(officer_schedule)
-    time_slots = [f"{i//4:02d}:{(i%4)*15:02d}" for i in range(48)]
-    
+    officer_ids = sorted(get_all_officer_ids(officer_schedule))  # Sort to show M, S, OT officers
+    time_slots = generate_time_slots(START_HOUR, NUM_SLOTS)
+
     # Convert to matrix for display
     roster_matrix = schedule_to_matrix(officer_schedule)
     
@@ -621,7 +630,6 @@ if 'generated_schedule' in st.session_state and st.session_state['generated_sche
     
     # TAB 1: ADD SOS OFFICERS
     with tab1:
-        st.write("Add SOS officers to the schedule using the same interface as the initial generation")
         
         # Initialize SOS session state if not exists
         if 'sos_extracted_data' not in st.session_state:
@@ -641,7 +649,7 @@ if 'generated_schedule' in st.session_state and st.session_state['generated_sche
             <li>Different officers are separated by commas <code>,</code></li>
             <li>If an officer has multiple SOS timings, separate them with semicolons <code>;</code></li>
             <li>Optional pre-assigned counters must be enclosed in parentheses <code>()</code> before the time</li>
-            <li>Times are in 24-hour <code>HHMM-HHMM</code> format</li>
+            <li>Time ranges are in 24-hour <code>HHMM-HHMM</code> format</li>
             </ol>
             </div>
             """,
@@ -828,6 +836,10 @@ officer E (1000-1130)'''
                                         save_roster_edit(
                                             edit_type='add_sos',
                                             officer_id=f"{len(sos_timings_list)} SOS officers",
+                                            slot_start=0,  # Not applicable for bulk SOS add
+                                            slot_end=47,   # Not applicable for bulk SOS add
+                                            time_start="10:00",
+                                            time_end="22:00",
                                             roster_history_id=st.session_state.get('roster_history_id'),
                                             notes=f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist())}"
                                         )
@@ -886,9 +898,13 @@ officer E (1000-1130)'''
                             # Save to database
                             save_roster_edit(
                                 edit_type='add_sos',
-                                officer_id="Manual SOS entry",
+                                officer_id=f"{len(sos_timings_list)} SOS officers",
+                                slot_start=0,  # Not applicable for bulk SOS add
+                                slot_end=47,   # Not applicable for bulk SOS add
+                                time_start="10:00",
+                                time_end="22:00",
                                 roster_history_id=st.session_state.get('roster_history_id'),
-                                notes=f"Added SOS officers manually: {sos_timings_manual.strip()}"
+                                notes=f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist())}"
                             )
                             
                             st.success(f"✅ Added SOS officers to roster")
@@ -903,7 +919,8 @@ officer E (1000-1130)'''
     # TAB 2: SWAP
     with tab2:
         st.write("Swap counter assignments between two officers")
-        
+        # Refresh officer IDs to include all current officers
+        officer_ids = sorted(get_all_officer_ids(st.session_state['edited_schedule']))
         col1, col2 = st.columns(2)
         with col1:
             swap_officer1 = st.selectbox("Officer 1", officer_ids, key="swap_off1")
@@ -917,7 +934,7 @@ officer E (1000-1130)'''
             swap_start = st.selectbox("From Time", time_slots, key="swap_start")
         with col4:
             swap_end = st.selectbox("To Time", time_slots,
-                                    index=min(47, time_to_slot(swap_start) + 3),
+                                    index=min(47, hhmm_to_slot(swap_start) + 3),
                                     key="swap_end")
         
         if st.button("Swap Assignments", type="primary", key="swap_btn"):
@@ -926,9 +943,8 @@ officer E (1000-1130)'''
             else:
                 officer1_idx = officer_ids.index(swap_officer1)
                 officer2_idx = officer_ids.index(swap_officer2)
-                start_idx = time_to_slot(swap_start)
-                end_idx = time_to_slot(swap_end)
-                
+                start_idx = hhmm_to_slot(swap_start)
+                end_idx = hhmm_to_slot(swap_end)
                 if start_idx <= end_idx:
                     # Perform swap operation
                     temp = roster_matrix[officer1_idx, start_idx:end_idx+1].copy()
@@ -949,6 +965,8 @@ officer E (1000-1130)'''
                         roster_history_id=st.session_state.get('roster_history_id'),
                         notes=f"Swapped {swap_officer1} ↔ {swap_officer2} from {swap_start} to {swap_end}"
                     )
+
+
                     
                     # Add to edit history with structured data
                     edit_entry = {
@@ -959,7 +977,7 @@ officer E (1000-1130)'''
                             'officer1': swap_officer1,
                             'officer2': swap_officer2,
                             'start_time': swap_start,
-                            'end_time': swap_end,
+                            'end_time': get_slot_end_time(end_idx - 1),
                             'start_idx': start_idx,
                             'end_idx': end_idx
                         }
@@ -979,13 +997,13 @@ officer E (1000-1130)'''
             del_start = st.selectbox("From Time", time_slots, key="del_start")
         with col3:
             del_end = st.selectbox("To Time", time_slots, 
-                                   index=min(47, time_to_slot(del_start) + 3),
+                                   index=min(47, hhmm_to_slot(del_start) + 3),
                                    key="del_end")
         
         if st.button("Delete Assignment", type="primary", key="del_btn"):
             officer_idx = officer_ids.index(del_officer)
-            start_idx = time_to_slot(del_start)
-            end_idx = time_to_slot(del_end)
+            start_idx = hhmm_to_slot(del_start)
+            end_idx = hhmm_to_slot(del_end)
             
             if start_idx <= end_idx:
                 # Perform delete operation
@@ -1012,7 +1030,7 @@ officer E (1000-1130)'''
                     'data': {
                         'officer': del_officer,
                         'start_time': del_start,
-                        'end_time': del_end,
+                        'end_time': get_slot_end_time(end_idx - 1),
                         'start_idx': start_idx,
                         'end_idx': end_idx
                     }
@@ -1078,23 +1096,23 @@ officer E (1000-1130)'''
     
     
     # Database edit history viewer (keep at bottom)
-    with st.expander("🗄️ View Database Edit History"):
-        recent_edits = get_roster_edits(limit=20)
-        if recent_edits:
-            edit_data = []
-            for edit in recent_edits:
-                edit_data.append({
-                    'Timestamp': edit.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                    'Type': edit.edit_type,
-                    'Officer': edit.officer_id,
-                    'Officer 2': edit.officer_id_2 or '-',
-                    'Counter': edit.counter_no or '-',
-                    'Time Range': f"{edit.time_start}-{edit.time_end}",
-                    'Notes': edit.notes or '-'
-                })
-            st.dataframe(edit_data, use_container_width=True)
-        else:
-            st.info("No edit history found in database")
+with st.expander("🗄️ View Database Edit History"):
+    recent_edits = get_roster_edits(limit=20)
+    if recent_edits:
+        edit_data = []
+        for edit in recent_edits:
+            edit_data.append({
+                'Timestamp': edit.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                'Type': edit.edit_type,
+                'Officer': edit.officer_id if edit.officer_id else '-',
+                'Officer 2': edit.officer_id_2 if edit.officer_id_2 else '-',
+                'Counter': str(edit.counter_no) if edit.counter_no is not None else '-',  # ← Convert to string
+                'Time Range': f"{edit.time_start if edit.time_start else '-'}-{edit.time_end if edit.time_end else '-'}",
+                'Notes': edit.notes if edit.notes else '-'
+            })
+        st.dataframe(edit_data, use_container_width=True)
+    else:
+        st.info("No edit history found in database")
 
 # === Footer ===
 st.markdown("---")

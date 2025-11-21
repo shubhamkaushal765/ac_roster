@@ -5,8 +5,9 @@ Refactored backend_algo.py using OOP design with Counter and CounterMatrix class
 import re
 from copy import deepcopy
 from typing import Dict, List, Tuple, Optional
-
+import string
 import numpy as np
+from datetime import datetime, timedelta
 
 from acroster.counter import CounterMatrix
 # Import existing classes
@@ -35,6 +36,9 @@ def hhmm_to_slot(hhmm: str) -> int:
         ValueError: If hhmm is empty or invalid format
     """
     hhmm = hhmm.strip()
+
+    hhmm = hhmm.translate(str.maketrans('', '', string.punctuation))
+
     
     if not hhmm:
         raise ValueError("Time string cannot be empty")
@@ -61,6 +65,19 @@ def slot_to_hhmm(slot: int) -> str:
     h = START_HOUR + slot // 4
     m = (slot % 4) * 15
     return f"{h:02d}{m:02d}"
+
+def generate_time_slots(start_hour: int, num_slots: int) -> list[str]:
+    """Generate a list of HHMM time slots dynamically."""
+    start_time = datetime.strptime(f"{start_hour:02d}:00", "%H:%M")
+    delta = timedelta(minutes=15)
+
+    times = []
+    current = start_time
+    for _ in range(num_slots):
+        times.append(current.strftime("%H%M"))
+        current += delta
+
+    return times
 
 
 # ===================== ROSTER TEMPLATE GENERATION =====================
