@@ -25,13 +25,13 @@ START_HOUR = 10
 def hhmm_to_slot(hhmm: str) -> int:
     """
     Convert hhmm string to a slot index (0–47).
-    
+
     Args:
         hhmm: Time string in HHMM format (e.g., '0800', '1430')
-    
+
     Returns:
         Slot index (0-47)
-    
+
     Raises:
         ValueError: If hhmm is empty or invalid format
     """
@@ -39,23 +39,23 @@ def hhmm_to_slot(hhmm: str) -> int:
 
     hhmm = hhmm.translate(str.maketrans('', '', string.punctuation))
 
-    
+
     if not hhmm:
         raise ValueError("Time string cannot be empty")
-    
+
     if not hhmm.isdigit():
         raise ValueError(f"Time string '{hhmm}' must contain only digits")
-    
+
     t = int(hhmm)
     h = t // 100
     m = t % 100
-    
+
     # Validate hours and minutes
     if h < 0 or h > 23:
         raise ValueError(f"Invalid hour: {h} in time '{hhmm}'")
     if m < 0 or m > 59:
         raise ValueError(f"Invalid minute: {m} in time '{hhmm}'")
-    
+
     slot = (h - START_HOUR) * 4 + (m // 15)
     return max(0, min(NUM_SLOTS - 1, slot))
 
@@ -81,55 +81,6 @@ def generate_time_slots(start_hour: int, num_slots: int) -> list[str]:
 
 
 # ===================== ROSTER TEMPLATE GENERATION =====================
-
-def add_4main_roster(full_counters):
-    """Generate 4 roster patterns (a, b, c, d) from 3 counter assignments."""
-    a = (
-            [full_counters[0]] * 6
-            + [0] * 2
-            + [full_counters[1]] * 7
-            + [0] * 3
-            + [full_counters[2]] * 9
-            + [0] * 3
-            + [full_counters[0]] * 9
-            + [0]
-            + [full_counters[1]] * 8
-    )
-    b = (
-            [full_counters[1]] * 8
-            + [0] * 2
-            + [full_counters[2]] * 8
-            + [0] * 3
-            + [full_counters[0]] * 9
-            + [0] * 3
-            + [full_counters[1]] * 7
-            + [0]
-            + [full_counters[2]] * 7
-    )
-    c = (
-            [full_counters[2]] * 10
-            + [0] * 2
-            + [full_counters[0]] * 9
-            + [0] * 3
-            + [full_counters[1]] * 9
-            + [0] * 3
-            + [full_counters[2]] * 5
-            + [0]
-            + [0] * 6
-    )
-    d = (
-            [0] * 5
-            + [0] * 1
-            + [full_counters[0]] * 6
-            + [0] * 2
-            + [full_counters[1]] * 10
-            + [0] * 3
-            + [full_counters[2]] * 9
-            + [0] * 3
-            + [full_counters[0]] * 9
-    )
-    return (a, b, c, d)
-
 
 def init_main_officers_template(mode: OperationMode) -> Dict[int, np.ndarray]:
     """Get roster templates from config based on mode"""
@@ -402,34 +353,34 @@ def officer_to_counter_matrix(officers: Dict[str, Officer]) -> np.ndarray:
 def parse_availability(avail_str: str) -> np.ndarray:
     """Convert availability string into binary numpy array."""
     schedule = np.zeros(NUM_SLOTS, dtype=int)
-    
+
     # Support both semicolon and comma separators
     separator = ';' if ';' in avail_str else ','
-    
+
     for rng in avail_str.split(separator):
         rng = rng.strip()
-        
+
         # Skip empty ranges
         if not rng:
             continue
-        
+
         # Validate format
         if '-' not in rng:
             print(f"Warning: Invalid range format '{rng}' - missing hyphen, skipping")
             continue
-        
+
         parts = rng.split("-")
         if len(parts) != 2:
             print(f"Warning: Invalid range format '{rng}' - too many hyphens, skipping")
             continue
-        
+
         start, end = parts[0].strip(), parts[1].strip()
-        
+
         # Skip if either time is empty
         if not start or not end:
             print(f"Warning: Empty time value in range '{rng}', skipping")
             continue
-        
+
         try:
             start_slot = hhmm_to_slot(start)
             end_slot = hhmm_to_slot(end)
@@ -437,7 +388,7 @@ def parse_availability(avail_str: str) -> np.ndarray:
         except ValueError as e:
             print(f"Warning: Could not parse range '{rng}': {e}")
             continue
-    
+
     return schedule
 
 def convert_input(user_input: str):
