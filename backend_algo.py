@@ -10,14 +10,8 @@ import numpy as np
 from datetime import datetime, timedelta
 
 from acroster.counter import CounterMatrix
-# Import existing classes
 from acroster.officer import Officer, MainOfficer, OTOfficer, SOSOfficer
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
-
-# Constants
-NUM_SLOTS = 48
-START_HOUR = 10
-
 
 
 # ===================== TIME CONVERSION UTILITIES =====================
