@@ -1,777 +1,708 @@
-# Officer Scheduling System 📋
+# ACar/DCar Roster Generator - Morning Shift 
 
-A sophisticated scheduling system for managing officer assignments across service counters throughout the day. This
-system handles complex scheduling requirements including breaks, overtime, late arrivals, early departures, and special
-assignments.
+A sophisticated scheduling system that allocates break time and counters for each SOS officer. Ensures maximum running counters while fulfilling break constraints (no more than 2.5h at any counter).
 
----
 
-## 📚 Table of Contents
+## 📋 Table of Contents
 
-- [For Non-Technical Users](#-for-non-technical-users)
-    - [What Does This System Do?](#what-does-this-system-do)
-    - [Key Features](#key-features)
-    - [How It Works (Simple View)](#how-it-works-simple-view)
-- [For Developers](#-for-developers)
-    - [System Architecture](#system-architecture)
-    - [Class Diagram](#class-diagram)
-    - [Workflow Diagram](#workflow-diagram)
-    - [Code Dependencies](#code-dependencies)
-    - [Quick Start](#quick-start)
-    - [API Reference](#api-reference)
-- [Installation](#-installation)
-- [Usage Examples](#-usage-examples)
-- [Configuration](#-configuration)
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [System Flow](#system-flow)
+- [Module Documentation](#module-documentation)
+- [Usage Examples](#usage-examples)
+- [Configuration](#configuration)
+- [Contributing](#contributing)
+- [License](#license)
 
----
 
-## 👥 For Non-Technical Users
+## 🎯 Overview
 
-### What Does This System Do?
+- **48 time slots per shift**: 15-minute intervals from 10:00 to 22:00
+- **Two operation modes**: Arrival (41 counters) and Departure (37 counters)
+- **Three officer types**: Main officers (fixed templates), SOS officers (flexible timimg), OT officers (1000-1030)
+- **Intelligent optimization**: Find the best break timing for each officers to optimize running counters
+- **Interactive editing**: Handles manual counter amendments with full edit history
 
-Imagine you're managing a service center with 41 counters that need to be staffed from 10:00 AM to 10:00 PM. You have
-multiple officers working different shifts, some arrive late, some leave early, and some work overtime. This system
-automatically:
+### Key Capabilities
 
-1. **Assigns officers to counters** throughout the day
-2. **Handles schedule conflicts** when officers are unavailable
-3. **Manages breaks** and shift changes
-4. **Tracks overtime** assignments
-5. **Generates reports** showing who works where and when
+- ✅ Automated roster generation from simple text inputs
+- ✅ Constraint-aware break scheduling for SOS officers (max 10 consecutive working slots)
+- ✅ Counter assignment maximizes running counters, with new counters opened according to the priority list
+- ✅ Real-time visualization with interactive Plotly charts
+- ✅ Edit history tracking and undo functionality
+- ✅ SQLite persistence for audit trails and history
 
-### Key Features
 
-```mermaid
-mindmap
-  root((Scheduling System))
-    Officer Management
-      Main Officers
-      SOS Officers
-      Overtime Assignments
-    Time Management
-      15-minute slots
-      10 AM - 10 PM
-      Break scheduling
-    Counter Assignment
-      41 service counters
-      Priority system
-      Auto-optimization
-    Reporting
-      Statistics
-      Visual timetables
-      Coverage analysis
-```
+## ✨ Features
 
-### How It Works (Simple View)
+### Core Functionality
 
-```mermaid
-graph TD
-    A[📝 Input Officer List] --> B[🔧 Apply Templates]
-B --> C[⏰ Handle Late/Early Times]
-C --> D[🎯 Assign Counters]
-D --> E[➕ Add Overtime Officers]
-E --> F[📊 Generate Schedule]
-F --> G[📈 Create Reports]
+- **Template-Based Main Rosters**: Pre-defined for main officers
+- **Late Arrival/Early Departure Handling**: `RA` (Report At) and `RO` (Report Off)
+- **Accepts Manual Counter Allocation**: Allows user to update counters assigned by Chops Room
+- **OT Officer Integration**: Add counters occupied by OT officers since the previous shift
 
-style A fill: #e1f5ff
-style B fill:#fff4e1
-style C fill: #ffe1e1
-style D fill: #e1ffe1
-style E fill: #f5e1ff
-style F fill: #e1ffff
-style G fill:#ffe1f5
-```
+### Advanced Scheduling
 
-**Step-by-Step Process:**
+- **SOS Officer Optimization**: Beam search algorithm minimizes manning fluctuations
+- **Break Schedule Generation**: Recursive algorithm generates valid break combinations
+- **Connected Interval Packing**: Smart counter assignment prioritizing continuity
 
-1. **Start**: You provide a list of officers working today (e.g., "Officers 1 through 18")
-2. **Templates Applied**: Each officer gets a pre-defined schedule based on their role
-3. **Adjustments**: System applies any late arrivals or early departures
-4. **Counter Assignment**: Officers are assigned to specific counters
-5. **Overtime**: Adds any overtime or special officers
-6. **Output**: Creates a complete schedule showing every officer's assignment every 15 minutes
+### User Interface (Streamlit)
+- **Three Visualization Modes**:
+  - Counter timetable (which officer at each counter)
+  - Officer timetable (which counter each officer is at)
+  - Manning statistics (coverage by zone and time)
+- **Interactive Roster Editor**: Swap, delete, and add assignments post-generation
+- **Raw Text Parsing**: Auto-extract officer timings from operations room messages
 
-**Example Output:**
+
+## 🏗️ Architecture
 
 ```
-10:00: Officer M1 → Counter 41, Officer M2 → Counter 30
-10:15: Officer M1 → Counter 41, Officer M2 → Counter 30
-...and so on for the entire day
+┌─────────────────────────────────────────────┐
+│  Layer 1: UI/Presentation                   │
+│  app.py                                     │  ← Entry point
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│  Layer 2: Facade/API                        │
+│  schedule_manager.py                        │  ← High-level interface
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│  Layer 3: Orchestration                     │
+│  algorithm_orchestrator.py                  │  ← Coordinates services
+└──────────────┬──────────────────────────────┘
+               │
+               ├──────────────────────────────┐
+               │                              │
+┌──────────────▼──────────────┐  ┌───────────▼──────────────┐
+│  Layer 4: Domain Services   │  │  Layer 4: Domain Services│
+│  roster_builder.py          │  │  sos_scheduler.py        │
+│  assignment_engine.py       │  │  optimization.py         │
+│  statistics.py              │  │  plotter.py              │
+└──────────────┬──────────────┘  └───────────┬──────────────┘
+               │                              │
+               └──────────────┬───────────────┘
+                              │
+┌──────────────────────────────▼──────────────────────────────┐
+│  Layer 5: Domain Models (Data + Behavior)                   │
+│  officer.py, counter.py                                     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│  Layer 6: Infrastructure/Utilities                          │
+│  config.py, time_utils.py, database.py                     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
----
+## 🚀 Installation
 
-## 💻 For Developers
+### Prerequisites
 
-### System Architecture
-
-The system follows a modular, object-oriented design with clear separation of concerns:
-
-```mermaid
-graph TB
-    subgraph "User Interface Layer"
-        UI[User Input/API]
-    end
-
-    subgraph "Core Engine"
-        SE[SchedulingEngine]
-    end
-
-    subgraph "Managers & Schedulers"
-        TM[TemplateManager]
-        MOS[MainOfficerScheduler]
-        SOS[SOSOfficerScheduler]
-        CM[CounterMatrix]
-    end
-
-    subgraph "Utilities"
-        IP[InputParser]
-        SC[ScheduleConfig]
-        SG[StatisticsGenerator]
-        SV[ScheduleVisualizer]
-    end
-
-    subgraph "Data Models"
-        OFF[Officer]
-        ADJ[Adjustment]
-    end
-
-    UI --> SE
-    SE --> TM
-    SE --> MOS
-    SE --> SOS
-    SE --> CM
-    MOS --> IP
-    MOS --> OFF
-    MOS --> ADJ
-    SE --> SG
-    SE --> SV
-    TM --> SC
-    IP --> SC
-    SG --> SC
-    style SE fill: #ff9999
-    style UI fill: #99ccff
-    style TM fill: #99ff99
-    style MOS fill: #ffcc99
-    style SOS fill: #ffcc99
-    style CM fill: #cc99ff
-```
-
-### Class Diagram
-
-Officer (abstract)
-
-├── MainOfficer
-
-├── SOSOfficer
-
-└── OTOfficer
-
-Schedule
-
-├── CounterManager
-
-├── List(Officer)
-
-├── ScheduleOptimizer
-
-└── StatisticsGenerator
-
-ScheduleOptimizer
-
-└── SegmentTree
-
-Utilities
-
-├── TimeConverter
-
-├── InputParser
-
-└── IntervalManager
-
-
-```mermaid
-classDiagram
-    class ScheduleConfig {
-        +NUM_SLOTS: int
-        +NUM_COUNTERS: int
-        +START_HOUR: int
-        +hhmm_to_slot(hhmm: str) int
-        +slot_to_hhmm(slot: int) str
-    }
-
-    class Officer {
-        +officer_id: int
-        +schedule: ndarray
-        +is_main: bool
-        +key: str
-        +apply_late_arrival(slot: int)
-        +apply_early_departure(slot: int)
-        +assign_counter(counter, start, end)
-    }
-
-    class Adjustment {
-        +officer_id: int
-        +adjustment_type: str
-        +time_slot: int
-    }
-
-    class TemplateManager {
-        +create_4main_roster(counters) tuple
-        +initialize_main_officers_template() dict
-    }
-
-    class InputParser {
-        +parse_officer_range(str) Set
-        +parse_adjustments(str, Set) List
-        +parse_counter_assignments(str) List
-    }
-
-    class MainOfficerScheduler {
-        -template: dict
-        -schedule: dict
-        -reported_officers: Set
-        +generate_schedule(...) tuple
-        +update_last_counter_assignments(...)
-        +add_handwritten_counters(str)
-    }
-
-    class CounterMatrix {
-        +num_counters: int
-        +num_slots: int
-        +matrix: ndarray
-        +from_officer_schedule(dict) CounterMatrix
-        +add_overtime_counters(str)
-        +to_officer_schedule() dict
-    }
-
-    class StatisticsGenerator {
-        +generate(ndarray) str
-    }
-
-    class ScheduleVisualizer {
-        +plot_officer_timetable(dict) Figure
-    }
-
-    class SchedulingEngine {
-        -config: ScheduleConfig
-        -template_manager: TemplateManager
-        -main_scheduler: MainOfficerScheduler
-        -counter_matrix: CounterMatrix
-        +run(...) tuple
-    }
-
-    SchedulingEngine --> TemplateManager
-    SchedulingEngine --> MainOfficerScheduler
-    SchedulingEngine --> CounterMatrix
-    SchedulingEngine --> StatisticsGenerator
-    SchedulingEngine --> ScheduleVisualizer
-    MainOfficerScheduler --> Officer
-    MainOfficerScheduler --> InputParser
-    MainOfficerScheduler --> Adjustment
-    InputParser --> ScheduleConfig
-    StatisticsGenerator --> ScheduleConfig
-```
-
-### Workflow Diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Engine as SchedulingEngine
-    participant Template as TemplateManager
-    participant Parser as InputParser
-    participant MainSched as MainOfficerScheduler
-    participant Matrix as CounterMatrix
-    participant Stats as StatisticsGenerator
-    User ->> Engine: run(officers, counters, timings...)
-    Engine ->> Template: initialize_main_officers_template()
-    Template -->> Engine: officer_templates
-    Engine ->> MainSched: new MainOfficerScheduler(templates)
-    Engine ->> Parser: parse_officer_range(reported_officers)
-    Parser -->> Engine: set of officer_ids
-    Engine ->> Parser: parse_adjustments(ro_ra_officers)
-    Parser -->> Engine: list of Adjustments
-    Engine ->> MainSched: generate_schedule(officers, counters, adjustments)
-    MainSched ->> MainSched: Apply templates
-    MainSched ->> MainSched: Apply timing adjustments
-    MainSched ->> MainSched: Apply counter assignments
-    MainSched -->> Engine: main_schedule
-    Engine ->> Matrix: from_officer_schedule(main_schedule)
-    Matrix -->> Engine: counter_matrix
-    Engine ->> MainSched: add_handwritten_counters(overrides)
-    Engine ->> Matrix: add_overtime_counters(ot_counters)
-    Engine ->> Stats: generate(counter_matrix)
-    Stats -->> Engine: statistics_text
-    Engine -->> User: (main_matrix, final_matrix, schedule, stats)
-```
-
-### Code Dependencies
-
-```mermaid
-graph LR
-    subgraph "External Dependencies"
-        NP[numpy]
-        PL[plotly]
-        RE[re - regex]
-        BS[bisect]
-        CP[copy]
-        CL[collections]
-    end
-
-    subgraph "Core Modules"
-        SC[ScheduleConfig]
-        OFF[Officer]
-        ADJ[Adjustment]
-    end
-
-    subgraph "Managers"
-        TM[TemplateManager]
-        IP[InputParser]
-    end
-
-    subgraph "Schedulers"
-        MOS[MainOfficerScheduler]
-        SOS[SOSOfficerScheduler]
-    end
-
-    subgraph "Utilities"
-        CM[CounterMatrix]
-        SG[StatisticsGenerator]
-        SV[ScheduleVisualizer]
-    end
-
-    subgraph "Main Engine"
-        SE[SchedulingEngine]
-    end
-
-    NP --> OFF
-    NP --> CM
-    NP --> SG
-    PL --> SV
-    RE --> IP
-    SC --> IP
-    SC --> SG
-    SC --> SV
-    OFF --> MOS
-    ADJ --> MOS
-    IP --> MOS
-    TM --> SE
-    MOS --> SE
-    SOS --> SE
-    CM --> SE
-    SG --> SE
-    SV --> SE
-    style SE fill: #ff6b6b
-    style NP fill: #4ecdc4
-    style PL fill: #4ecdc4
-```
-
-### Data Flow
-
-```mermaid
-flowchart TD
-    A[Raw Input Strings] -->|parse_officer_range| B[Set of Officer IDs]
-    A -->|parse_adjustments| C[List of Adjustments]
-    A -->|parse_counter_assignments| D[Counter Assignments]
-    E[Officer Templates] --> F[MainOfficerScheduler]
-    B --> F
-    C --> F
-    D --> F
-    F -->|generate_schedule| G[Officer Schedule Dict]
-    G -->|from_officer_schedule| H[CounterMatrix]
-    I[Handwritten Overrides] --> H
-    J[Overtime Counters] --> H
-    H -->|to_officer_schedule| K[Final Officer Schedule]
-    H -->|generate| L[Statistics Report]
-    K -->|plot_officer_timetable| M[Visual Timetable]
-    K --> N[Output]
-    L --> N
-    M --> N
-    style A fill: #e1f5ff
-    style N fill: #c7f5c3
-```
-
-### Quick Start
-
-```python
-from ac_roster import SchedulingEngine
-
-# Initialize the engine
-engine = SchedulingEngine()
-
-# Define your inputs
-main_officers = "1-18"  # Officers 1 through 18 are working
-counter_assignments = "4AC1, 8AC11"  # Officer 4 at Counter 1, Officer 8 at Counter 11
-sos_timings = ""  # No special officers today
-adjustments = "3RO2100"  # Officer 3 leaves at 21:00
-handwritten = "5AC13"  # Officer 5 manually assigned to Counter 13
-overtime = "2,20,40"  # Counters 2, 20, and 40 are overtime
-
-# Run the scheduling algorithm
-main_matrix, final_matrix, officer_schedule, stats = engine.run(
-  main_officers,
-  counter_assignments,
-  sos_timings,
-  adjustments,
-  handwritten,
-  overtime
-)
-
-# View results
-print(stats[0])  # Statistics report
-```
-
-### API Reference
-
-#### SchedulingEngine.run()
-
-**Purpose**: Main entry point for generating schedules
-
-**Parameters**:
-
-- `main_officers_reported` (str): Range of officers (e.g., "1-18" or "1,3,5-10")
-- `report_gl_counters` (str): Initial counter assignments (e.g., "4AC1, 8AC11")
-- `sos_timings` (str): Special officer timings (complex format)
-- `ro_ra_officers` (str): Late/early adjustments (e.g., "3RO2100, 5RA1030")
-- `handwritten_counters` (str): Manual overrides (e.g., "3AC12, 5AC13")
-- `ot_counters` (str): Overtime counter list (e.g., "2,20,40")
-
-**Returns**: Tuple containing:
-
-1. `main_matrix` (ndarray): Main officer assignments
-2. `final_matrix` (ndarray): Final assignments including SOS
-3. `officer_schedule` (dict): Schedule by officer
-4. `stats` (list): Two statistics reports
-
-**Example**:
-
-```python
-results = engine.run(
-    main_officers_reported="1-18",
-    report_gl_counters="4AC1",
-    sos_timings="",
-    ro_ra_officers="3RO2100",
-    handwritten_counters="",
-    ot_counters="2"
-)
-```
-
-#### ScheduleConfig Utilities
-
-```python
-# Convert time to slot
-slot = ScheduleConfig.hhmm_to_slot("1030")  # Returns 2 (10:30 AM = slot 2)
-
-# Convert slot to time
-time = ScheduleConfig.slot_to_hhmm(2)  # Returns "1030"
-```
-
-#### Time Slot System
-
-The day is divided into 48 slots (15-minute intervals):
-
-- Slot 0 = 10:00 AM
-- Slot 1 = 10:15 AM
-- Slot 2 = 10:30 AM
-- ...
-- Slot 47 = 21:45 PM (9:45 PM)
-
----
-
-## 📦 Installation
+- Python 3.11 or higher
+- pip (Python package manager)
 
 ### Setup
 
-1. Clone or download the repository
-2. Ensure you have Python 3.11+
-3. Install dependencies:
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd acroster
+   ```
+
+2. **Create virtual environment** (recommended)
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Required Packages
+
+```
+streamlit>=1.28.0
+numpy>=1.24.0
+pandas>=2.0.0
+plotly>=5.17.0
+sqlalchemy>=2.0.0
+```
+
+
+## 🎬 Quick Start
+
+### Running the Web Application
 
 ```bash
-uv pip install 
+streamlit run app.py
+```
+
+### Basic Usage Flow
+
+1. **Select Operation Mode**: Choose Arrival or Departure
+2. **Key in Officers' S/N in Main Roster**: e.g., `1-18`
+3. **Configure Counters**: 
+   - GL counters: `4AC1, 8AC11, 12AC21, 16AC31`
+   - OT counters: `2,20,40`
+4. **Add Adjustments**: e.g., `3RO2100` (officer 3 reports off at 21:00)
+5. **Generate Schedule**: Click "Generate Schedule" button
+6. **Add SOS Officers** (optional): Use Roster Editor to add support officers
+7. **Make Additional Edits** (optional): Swap, delete, or modify assignments
+
+
+```python
+from acroster.schedule_manager import ScheduleManager
+from acroster.config import OperationMode
+
+# Create manager
+manager = ScheduleManager(mode=OperationMode.ARRIVAL)
+
+# Generate roster
+results = manager.run_algorithm(
+    main_officers_reported="1-18",
+    report_gl_counters="4AC1, 8AC11, 12AC21, 16AC31",
+    sos_timings="",  # Add SOS later via editor
+    ro_ra_officers="3RO2100, 11RO1700",
+    handwritten_counters="3AC12,5AC13",
+    ot_counters="2,20,40"
+)
+
+# Access results
+main_matrix, final_matrix, officer_schedule, statistics = results
+
+# Get specific officer's schedule
+m1_schedule = manager.get_officer_schedule("M1")
+print(f"Officer M1 schedule: {m1_schedule[:10]}...")  # First 10 slots
+
+# Get officer counts
+counts = manager.get_all_officers_count()
+print(f"Total officers: {counts['total']}")
+```
+
+
+
+## 🔄 Pipeline
+
+```
+1. app.py (User clicks "Generate Schedule")
+   ↓
+2. schedule_manager.py → ScheduleManager.run_algorithm()
+   ↓
+3. algorithm_orchestrator.py → RosterAlgorithmOrchestrator.run()
+   ↓
+4. config.py → Load MODE_CONFIG, roster_templates
+   ↓
+5. roster_builder.py → RosterBuilder.build_main_officers()
+   │  ├─→ time_utils.py → hhmm_to_slot() for RA/RO parsing
+   │  └─→ officer.py → Create MainOfficer instances
+   ↓
+6. roster_builder.py → LastCounterAssigner.assign_last_counters()
+   │  ├─→ assignment_engine.py → Convert to CounterMatrix
+   │  └─→ counter.py → Query empty counters
+   ↓
+7. assignment_engine.py → CounterAssignmentEngine.assign_ot_officers()
+   │  └─→ officer.py → Create OTOfficer instances
+   │  └─→ counter.py → Update CounterMatrix
+   ↓
+8. sos_scheduler.py → SOSOfficerBuilder.build_sos_officers()
+   │  ├─→ time_utils.py → Parse time ranges
+   │  └─→ officer.py → Create SOSOfficer instances
+   ↓
+9. sos_scheduler.py → BreakScheduleGenerator.generate_break_schedules()
+   │  └─→ Recursive break placement algorithm
+   ↓
+10. optimization.py → ScheduleOptimizer.optimize()
+    │  └─→ Beam search to select best break schedules
+    ↓
+11. assignment_engine.py → SOSAssignmentEngine.assign_sos_officers()
+    │  └─→ counter.py → Interval packing algorithm
+    ↓
+12. statistics.py → StatisticsGenerator.generate_statistics()
+    │  └─→ time_utils.py → slot_to_hhmm() for display
+    ↓
+13. schedule_manager.py → Return results to app
+    ↓
+14. plotter.py → Generate visualizations
+    │  └─→ time_utils.py → Format time labels
+    ↓
+15. app.py → Display results to user
+```
+
+### Data Transformation
+
+```
+Raw User Input (strings)
+  ↓ [roster_builder.py]
+Officer Objects (domain models)
+  ↓ [assignment_engine.py]
+CounterMatrix (structured data)
+  ↓ [sos_scheduler.py + optimization.py]
+CounterMatrix with SOS (enhanced data)
+  ↓ [statistics.py]
+Text Statistics (formatted output)
+  ↓ [plotter.py]
+Plotly Figures (visualizations)
+  ↓ [app.py]
+User sees results
+```
+
+
+## 📚 Module Documentation
+
+#### `app.py`
+**Streamlit web application UI**
+- Three-panel visualization (counter timetable, officer timetable, statistics)
+- Roster editor to `swap`/`delete`/`add` officers
+- History sidebar with 🗑️ icon
+- Real-time chart updates with Plotly
+- Mobile-responsive layout
+
+---
+
+#### `schedule_manager.py`
+- Calls the pipeline to generate rosters and stores all results (matrices, schedules, statistics)
+- Provides convenient methods to query stored data (get individual officer schedules, count officers by type, export to dict, print summaries)
+- Manages session state (tracks if roster was generated, allows reset for reuse) making it ideal for interactive applications like web UIs and notebooks
+
+**Main Methods**:
+```python
+manager = ScheduleManager(mode=OperationMode.ARRIVAL)
+results = manager.run_algorithm(...)
+schedule = manager.get_officer_schedule("M1")
+counts = manager.get_all_officers_count()
+manager.print_summary()
 ```
 
 ---
 
-## 🚀 Usage Examples
+#### `algorithm_orchestrator.py`
 
-### Example 1: Basic Schedule
+**Pipeline**:
+1. Build main officer rosters
+2. Assign last counters (for officers with unassigned last counters in main roster)
+3. Add overtime officers
+4. Build and optimize SOS officer schedules
+5. Assign SOS officers to counters
+6. Generate statistics
 
+---
+
+#### `roster_builder.py`
+**Initialize counter timetable from main officers only"
+- Validates RA/RO adjustments (late arrival/early departure)
+- Handles ad-hoc counter changes from Chops Room
+
+**Key Classes**:
+- `RosterBuilder`: Main officer roster construction
+- `LastCounterAssigner`: Assigns last counters to officers in S/N `3,7,11...` from 2030-2200
+
+**Input Formats**:
 ```python
-from ac_roster import SchedulingEngine
-
-engine = SchedulingEngine()
-
-# Simple scenario: 10 officers, no special conditions
-results = engine.run(
-  main_officers_reported="1-10",
-  report_gl_counters="",
-  sos_timings="",
-  ro_ra_officers="",
-  handwritten_counters="",
-  ot_counters=""
-)
-
-main_matrix, final_matrix, officer_schedule, stats = results
-print(stats[0])
+main_officers_reported = "1,3,5-10,15"    # S/N
+ro_ra_officers = "3RO2100, 11RA1030"      # RO = report off, RA = report at
+report_gl_counters = "4AC1, 8AC11"        # Officer 4 at counter 1 from 1000 to 1115
+handwritten_counters = "3AC12"            # Ad-hoc counter changes from Chops Rooms (assumes 1000-1030 only)
 ```
 
-### Example 2: Complex Schedule with Adjustments
+
+#### `sos_scheduler.py`
+- Parses SOS officers' availability time range
+- Generates valid break schedules with constraints
+- Supports pre-assigned counter specifications
+
+**Key Classes**:
+- `AvailabilityParser`: Converts timing strings to binary arrays
+- `SOSOfficerBuilder`: Creates SOS officer objects
+- `BreakScheduleGenerator`: Recursive break placement algorithm
+
+**Break Constraints**:
+- Maximum 10 consecutive working slots without break
+- Minimum 4-slot gap between breaks
+- Break patterns: 36+ slots = 3 breaks, 20-35 slots = 2 breaks, 11-19 slots = 1 break
+
+**Input Format**:
+```python
+# Basic timing
+"1000-1300, 2000-2200"
+
+# Multiple ranges with semicolon
+"1315-1430;2030-2200"
+
+# Pre-assigned counter
+"(AC22)1000-1300, 2000-2200"
+```
+
+
+#### `optimization.py`
+- Optimizes SOS officer break schedule selection
+- Uses beam search to find best schedule combination
+- Minimizes manning fluctuation (penalty)
+- Maximizes coverage (reward)
+
+**Key Classes**:
+- `ScheduleOptimizer`: Beam search coordinator
+- `SegmentTree`: Scoring helper (penalty/reward computation)
+
+**Optimization Metrics**:
+- **Penalty**: Number of manning level changes (lower is better)
+- **Reward**: Sum of gaps from maximum manning (lower is better)
+- **Combined Score**: α × penalty - β × reward
+
+**Beam Width**: Controls search breadth (20-100 typical range)
+- Lower = faster but may miss optimal solution
+- Higher = slower but more thorough search
+
+
+#### `assignment_engine.py`
+- Assigns SOS officers to available counters
+- Converts officer schedules to counter matrix format
+- Adds OT officers to counters specified by users
+
+**Key Classes**:
+- `CounterAssignmentEngine`: Main/OT officer assignments
+- `SOSAssignmentEngine`: SOS officer interval packing
+- `MatrixConverter`: Format conversions
+
+**SOS Assignment Priority**:
+1. Pre-assigned counters (if specified)
+2. Partial counters with connected intervals
+3. Already-used SOS counters with connections
+4. Assign new counters (starting with the highest counter number for each zone)
+
+
+
+#### `statistics.py`
+
+**Output Format**:
+```
+ACar
+
+1000: 28/1
+8/7/7/6
+
+1030: 30/1
+8/8/8/6
+
+[Car counters / Motor counter]
+[Zone1 / Zone2 / Zone3 / Zone4]
+```
+
+
+#### `plotter.py`
+- Counter timetable: Shows officer at each counter over time
+- Officer timetable: Shows counter for each officer over time
+- Hover tooltips with time/counter/officer info on plotly
+- Graph-paper background to improve chart readability
+
+
+#### `officer.py`
+
+**Classes**:
+- `Officer` (abstract): Base class with schedule array
+- `MainOfficer`: Fixed template + adjustments (RA/RO/last counter)
+- `SOSOfficer`: Flexible availability + break schedules
+- `OTOfficer`: Overtime officer (first 2 slots at specific counter)
+
+**Key Operations**:
+```python
+officer.assign_counter(slot, counter)
+officer.apply_late_arrival(slot)
+officer.apply_early_departure(slot)
+officer.get_working_intervals()  # SOS only
+```
+
+
+#### `counter.py`
+- Represents a single counter across 48 time slots
+- Queries for emptiness, fullness, connectivity (i.e. running counters)
+
+**Classes**:
+- `Counter`: Single counter with 48 slots
+- `CounterMatrix`: Manages all counters collectively
+
+**Key Operations**:
+```python
+counter.assign_officer(officer_key, start_slot, end_slot)
+counter.is_empty(start_slot, end_slot)
+counter.is_connected(start_slot, end_slot)
+
+matrix.get_partial_empty_counters()
+matrix.get_counters_with_prefix("S")  # Find SOS officers
+matrix.merge_with(other_matrix, priority="other")
+```
+
+
+#### `config.py`
+- Operation mode definitions (Arrival/Departure)
+- Roster templates for 40 main officers
+- Zone definitions and counter priority lists
+
+**Key Constants**:
+```python
+NUM_SLOTS = 48          # 15-minute intervals
+START_HOUR = 10         # 10:00 AM start
+OperationMode.ARRIVAL   # 41 counters
+OperationMode.DEPARTURE # 37 counters
+```
+
+**Mode Configuration**:
+- Number of counters
+- Zone boundaries (counter ranges)
+- Roster templates (predefined patterns)
+- Counter priority lists (for assignment)
+
+
+#### `time_utils.py`
+- Strips punctuation from input ("14:30" → "1430")
+- Validates hour/minute ranges
+- Generates time slot lists dynamically
+
+**Key Functions**:
+```python
+hhmm_to_slot("1430") → 18      # Converts time to slot index
+slot_to_hhmm(18) → "1430"      # Converts slot to time string
+generate_time_slots() → ["1000", "1015", ...]
+```
+
+#### `database.py` & `db_handlers.py`
+- Stores roster generation history
+- Tracks edits
+- Saves last user inputs for convenience
+
+**Tables**:
+- `roster_history`: Each roster generation with inputs/results
+- `last_inputs`: Most recent user inputs (single row)
+- `roster_edits`: Individual edit operations (swap/delete/add)
+
+**Key Functions**:
+```python
+save_last_inputs(inputs_dict)
+get_last_inputs() → dict
+save_roster_history(inputs, results) → history_id
+save_roster_edit(edit_type, officer_id, ...)
+get_roster_edits(limit=20) → list
+```
+
+
+## 💡 Usage Examples
+
+### Step 1: Generate Basic Roster
 
 ```python
-engine = SchedulingEngine()
+from acroster.schedule_manager import ScheduleManager
+from acroster.config import OperationMode
 
-# Multiple adjustments
-results = engine.run(
+manager = ScheduleManager(mode=OperationMode.ARRIVAL)
+
+results = manager.run_algorithm(
     main_officers_reported="1-18",
     report_gl_counters="4AC1, 8AC11, 12AC21, 16AC31",
     sos_timings="",
-    ro_ra_officers="3RO2100, 11RO1700, 15RO2130",  # 3 officers leave early
-    handwritten_counters="3AC12, 5AC13",  # Manual assignments
-    ot_counters="2,20,40"  # 3 overtime counters
+    ro_ra_officers="",
+    handwritten_counters="",
+    ot_counters="2,20,40"
 )
 
+manager.print_summary()
+```
+
+**Output**:
+```
+======================================================================
+SCHEDULING SUMMARY
+======================================================================
+
+Officers Scheduled:
+  Main Officers (M):    18
+  SOS Officers (S):      0
+  OT Officers (OT):      3
+  ─────────────────────────
+  Total:                21
+
+Counter Matrix Shape: (41, 48)
+  Counters: 41
+  Time Slots: 48
+```
+
+\
+### Step 2: Add Late Arrival/Early Departure
+
+```python
+results = manager.run_algorithm(
+    main_officers_reported="1-20",
+    report_gl_counters="4AC1, 8AC11, 12AC21, 16AC31",
+    sos_timings="",
+    ro_ra_officers="3RO2100, 11RO1700, 15RA1030",  # Officer 3 leaves at 21:00, etc.
+    handwritten_counters="3AC12",
+    ot_counters="2,20,40"
+)
+
+# Check officer 3's schedule (should be empty after 21:00)
+m3_schedule = manager.get_officer_schedule("M3")
+print(f"M3 at 21:00 (slot 44): {m3_schedule[44]}")  # Should be 0
+```
+
+### Step 3: Add SOS Officers
+
+```python
+results = manager.run_algorithm(
+    main_officers_reported="1-18",
+    report_gl_counters="4AC1, 8AC11, 12AC21, 16AC31",
+    sos_timings="(AC22)1000-1300;2000-2200, 1315-1430;2030-2200, 1200-1800",
+    ro_ra_officers="3RO2100",
+    handwritten_counters="",
+    ot_counters="2,20,40"
+)
+
+# Access results
 main_matrix, final_matrix, officer_schedule, stats = results
+
+# Check SOS officer assignments
+sos_officers = manager.get_officer_keys_by_type('S')
+print(f"SOS Officers: {sos_officers}")
+# Output: ['S1', 'S2', 'S3']
+
+# View S1's schedule
+s1_schedule = manager.get_officer_schedule("S1")
+print(f"S1 working at counters: {[c for c in s1_schedule if c != 0]}")
 ```
 
-### Example 3: Visualize Schedule
+### Step 4: Export Results
 
 ```python
-from ac_roster import ScheduleVisualizer
+# Export to dictionary
+export_data = manager.export_schedules_to_dict()
 
-# After getting officer_schedule from engine.run()
-fig = ScheduleVisualizer.plot_officer_timetable(officer_schedule)
-fig.show()  # Opens interactive plot in browser
+# Save to JSON
+import json
+with open('roster_output.json', 'w') as f:
+    json.dump(export_data, f, indent=2)
+
+# Access specific data
+print(f"Mode: {export_data['mode']}")
+print(f"Total officers: {export_data['officer_counts']['total']}")
+print(f"Optimization penalty: {export_data['optimization_penalty']}")
 ```
 
-### Example 4: Get Statistics
+### Example 5: Using the Orchestrator Directly
 
 ```python
-from ac_roster import StatisticsGenerator
+from acroster.algorithm_orchestrator import RosterAlgorithmOrchestrator
+from acroster.config import OperationMode
 
-# After getting counter_matrix
-stats_text = StatisticsGenerator.generate(counter_matrix)
-print(stats_text)
+# Lower-level API (stateless)
+orchestrator = RosterAlgorithmOrchestrator(mode=OperationMode.ARRIVAL)
+
+results = orchestrator.run(
+    main_officers_reported="1-18",
+    report_gl_counters="4AC1, 8AC11",
+    sos_timings="1000-1300, 2000-2200",
+    ro_ra_officers="3RO2100",
+    handwritten_counters="",
+    ot_counters="2,20,40"
+)
+
+# Unpack results
+main_matrix, final_matrix, officer_schedule, statistics = results
 ```
 
-**Sample Output**:
-
-```
-ACar 
-
-1000: 15/02
-4/4/4/3
-
-1100: 16/02
-4/4/5/3
-
-1200: 18/02
-5/5/5/3
-...
-```
-
----
 
 ## ⚙️ Configuration
 
-### Time Configuration
+### Operation Modes
 
-Edit `ScheduleConfig` class to modify:
+**Arrival Mode**:
+- 41 counters total (40 car + 1 motor)
+- Zones: 1-10, 11-20, 21-30, 31-40, 41
+- Counter priority: [41, 40, 30, 20, 39, 29, 19, ...]
 
-```python
-class ScheduleConfig:
-    NUM_SLOTS = 48  # Number of 15-min slots
-    NUM_COUNTERS = 41  # Total counters available
-    START_HOUR = 10  # Start time (10:00 AM)
-```
+**Departure Mode**:
+- 37 counters total (36 car + 1 motor)
+- Zones: 1-8, 9-18, 19-28, 29-36, 37
+- Counter priority: [37, 36, 35, ...]
 
-### Template Customization
-
-Modify officer templates in `TemplateManager.initialize_main_officers_template()`:
-
-```python
-# Each number represents a counter assignment
-main_officers[1] = [
-    41, 41, 41, 41, 41, 41,  # 10:00-11:30 → Counter 41
-    0, 0,  # 11:30-12:00 → Break
-    30, 30, 30, 30, 30, 30, 30,  # 12:00-13:45 → Counter 30
-    # ... and so on
-]
-```
-
----
-
-## 🏗️ Architecture Principles
-
-### 1. Single Responsibility Principle
-
-Each class has one clear purpose:
-
-- `ScheduleConfig`: Configuration only
-- `InputParser`: Input validation only
-- `MainOfficerScheduler`: Main officer scheduling only
-
-### 2. Dependency Inversion
-
-High-level modules don't depend on low-level modules:
+### Adjusting Optimization Parameters
 
 ```python
-SchedulingEngine → (interfaces) → Concrete
-implementations
+manager = ScheduleManager(mode=OperationMode.ARRIVAL)
+
+# In algorithm_orchestrator.py, modify:
+self.optimizer = ScheduleOptimizer(
+    beam_width=20,    # Increase for better results (slower)
+    alpha=0.1,        # Weight for smoothness penalty
+    beta=1.0          # Weight for coverage reward
+)
 ```
 
-### 3. Open/Closed Principle
+### Break Schedule Constraints
 
-Easy to extend without modifying existing code:
+Modify `sos_scheduler.py`:
 
 ```python
-# Add new officer type
-class ContractOfficerScheduler(BaseScheduler):
-    def generate_schedule(self):
-        # Custom logic
-        pass
+class BreakScheduleGenerator:
+    MAX_CONSECUTIVE_SLOTS = 10  # Change max working slots without break
+    
+    # Modify break patterns in _place_breaks()
+    if stretch_len >= 36:
+        pattern = [2, 3, 3]  # [break1_length, break2_length, break3_length]
+    elif stretch_len >= 20:
+        pattern = [2, 3]
 ```
 
-### 4. Encapsulation
-
-Internal details hidden behind clean interfaces:
-
-```python
-# Users don't need to know about slots
-engine.run(ro_ra_officers="3RO2100")  # Simple string input
-# Engine handles conversion to slots internally
-```
-
----
-
-## 🔍 Understanding the Schedule Matrix
-
-### Officer Schedule Format
-
-```python
-{
-    'M1': [41, 41, 41, 0, 0, 30, 30, ...],  # Officer M1's assignments
-    'M2': [30, 30, 0, 0, 20, 20, 20, ...],  # Officer M2's assignments
-    # Each number = counter assigned at that time slot
-    # 0 = break/not working
-}
-```
-
-### Counter Matrix Format
-
-```python
-# 41 rows (counters) × 48 columns (time slots)
-[
-    ['M1', 'M1', 'M1', '0', ...],  # Counter 1: who's assigned at each slot
-    ['M2', 'M2', 'M3', 'M3', ...],  # Counter 2
-    ...
-]
-```
-
----
-
-## 🐛 Debugging Tips
-
-### Enable Verbose Mode
-
-```python
-# Add print statements in specific classes
-class MainOfficerScheduler:
-    def generate_schedule(self, ...):
-        print(f"Processing {len(self.reported_officers)} officers")
-        # ... rest of code
-```
-
-### Validate Inputs
-
-```python
-from ac_roster import InputParser
-
-# Test input parsing separately
-officers = InputParser.parse_officer_range("1-5, 10")
-print(officers)  # {1, 2, 3, 4, 5, 10}
-```
-
-### Visualize Intermediate Results
-
-```python
-# Check counter matrix at any stage
-print(counter_matrix.matrix)
-print(f"Shape: {counter_matrix.matrix.shape}")
-```
-
----
-
-## 📈 Performance Considerations
-
-### Time Complexity
-
-- Officer schedule generation: O(n × m) where n = officers, m = slots
-- Matrix conversion: O(c × m) where c = counters, m = slots
-- Statistics generation: O(m) where m = slots
-
-### Memory Usage
-
-- Each matrix: ~41 × 48 × 8 bytes ≈ 15 KB
-- Officer schedules: ~n × 48 × 8 bytes
-
-### Optimization Tips
-
-```python
-# Use numpy operations instead of loops
-schedule = np.array([...])  # Fast
-schedule[:10] = 0  # Fast vectorized operation
-
-# Avoid
-for i in range(10):  # Slower
-    schedule[i] = 0
-```
-
----
 
 ## 🤝 Contributing
 
-### Adding New Features
+### Development Setup
 
-1. **Create a new class** following the existing pattern
-2. **Add tests** for your functionality
-3. **Update this README** with usage examples
-4. **Submit a pull request**
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Install development dependencies: `pip install -r requirements-dev.txt`
+4. Commit: `git commit -m "Add feature X"`
+5. Push and create a pull request
 
-### Code Style
 
-- Follow PEP 8
-- Use type hints
-- Add docstrings to all classes and methods
-- Keep methods small and focused
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Issue**: "Optimization takes too long"
+- **Solution**: Reduce beam width in Advanced Options (try 10-20)
+
+### Debug Mode
+
+Enable debug information in the Streamlit app:
+1. Expand "Advanced Options"
+2. Check "Show Debug Information"
+3. View raw matrices, officer details, and export data structures
+
+
+## 🔄 Version History
+
+### v2.0 (Current)
+- ✨ OOP refactor with cleaner architecture
+- ✨ Enhanced error handling and validation
+- ✨ Improved edit history tracking
+
+### v1.2
+- Improved SOS officer break optimization with beam search
+- Added database persistence
+
+### v1.1
+- Added Streamlit web interface
+- Added visualization with plotly
+
+### v1.0
+- Initial command-line roster generator
+- Basic SOS officer scheduling on top of main officers' timetable
 
 ---
 
-## 🎯 Roadmap
-
-- [ ] Add unit tests
-- [ ] Implement SOS officer optimization
-- [ ] Add REST API interface
-- [ ] Create web dashboard
-- [ ] Export to Excel/PDF
-- [ ] Real-time schedule updates
-- [ ] Mobile app integration
-
----
-
-## 📖 Glossary
-
-| Term             | Definition                                   |
-|------------------|----------------------------------------------|
-| **Slot**         | 15-minute time interval (48 slots per day)   |
-| **Counter**      | Service desk/station (41 total)              |
-| **Main Officer** | Regular scheduled officer (M1, M2, etc.)     |
-| **SOS Officer**  | Special/supplementary officer (S1, S2, etc.) |
-| **RA**           | Report After (late arrival time)             |
-| **RO**           | Report Out (early departure time)            |
-| **OT**           | Overtime counter assignment                  |
-| **AC**           | Assigned Counter (manual assignment)         |
-
----
-
-**Made with ❤️ for efficient workforce management**
+**Built with ❤️ for efficient workforce management**
