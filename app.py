@@ -11,12 +11,12 @@ import re
 from acroster import Plotter
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 from acroster.schedule_manager import ScheduleManager
+from acroster.time_utils import hhmm_to_slot, slot_to_hhmm, generate_time_slots
 from acroster.database import get_db_instance
 from acroster.db_handlers import (
     save_last_inputs, get_last_inputs, save_roster_history,
     save_roster_edit, get_roster_edits
 )
-from backend_algo import hhmm_to_slot, slot_to_hhmm, generate_time_slots
 
 def get_slot_end_time(slot_idx: int) -> str:
     """Get the end time of a slot (start time + 15 minutes)"""
@@ -32,15 +32,15 @@ def extract_officer_timings(full_text):
     """Extract officer timings from raw text format."""
     blocks = re.split(r'\n(?=\d{2}\s*x\s*)', full_text.strip(), flags=re.IGNORECASE)
     final_records = []
-    
+
     for block in blocks:
         if not block.strip():
             continue
-            
+
         base_parentheses = re.search(r'\(([^)]*?\d{4}.*?\d{4}[^)]*?)\)', block)
         if not base_parentheses:
             continue
-            
+
         base_text = base_parentheses.group(1)
         raw_base_times = re.split(r'[/,&]', base_text)
         base_times = []
@@ -48,30 +48,30 @@ def extract_officer_timings(full_text):
             cleaned = clean_time(t)
             if cleaned:
                 base_times.append(cleaned)
-        
+
         officer_lines = re.findall(r'(?:[-*]\s*)?([A-Za-z0-9@_ ]+(?:\([^)]*\))?)', block)
         officer_lines = [l.strip() for l in officer_lines if l.strip() and not re.match(r'\d{2}\s*x', l)]
-        
+
         for line in officer_lines:
             name = re.sub(r'\(.*?\)', '', line).strip()
-            
+
             extra_match = re.search(r'\(([^)]*?)\)', line)
             if extra_match:
                 extra_raw = extra_match.group(1)
                 extra_clean = clean_time(extra_raw)
             else:
                 extra_clean = None
-            
+
             combined_times = base_times.copy()
             if extra_clean:
                 combined_times.append(extra_clean)
-                
+
             timing_str = ";".join(combined_times)
             final_records.append({
                 "name": name,
                 "timing": timing_str
             })
-    
+
     return final_records
 
 
@@ -140,7 +140,7 @@ with st.sidebar:
             else:
                 description = edit_entry.get('description', 'Unknown edit')
                 is_legacy = False
-            
+
             col1, col2 = st.columns([4, 1])
             with col1:
                 st.text(f"{len(st.session_state['edit_history']) - i + 1}. {description}")
@@ -159,9 +159,9 @@ with st.sidebar:
                             st.session_state['delete_entry'] = edit_entry
         else:
             st.info("No history yet. Generate a schedule to begin.")
-        
+
         st.divider()
-    
+
     # Quick stats if schedule exists
     if 'generated_schedule' in st.session_state:
         counts = st.session_state.get('schedule_manager', None)
@@ -174,14 +174,14 @@ with st.sidebar:
 if st.session_state.get('confirm_reset', False):
     st.warning("⚠️ Delete 'Initialized Schedule'?")
     st.write("This will clear all schedules and reset all input fields. You'll start fresh.")
-    
+
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
         if st.button("✅ Yes, Reset All", type="primary", use_container_width=True):
             # Clear all session state related to schedules
             keys_to_clear = [
-                'generated_schedule', 'counter_matrix', 'final_counter_matrix', 
-                'output_text', 'roster_history_id', 'schedule_manager', 
+                'generated_schedule', 'counter_matrix', 'final_counter_matrix',
+                'output_text', 'roster_history_id', 'schedule_manager',
                 'edited_schedule', 'edit_history', 'schedule_initialized',
                 'sos_extracted_data', 'sos_confirmed', 'saved_inputs',
                 'confirm_reset', 'reset_index'
@@ -189,13 +189,13 @@ if st.session_state.get('confirm_reset', False):
             for key in keys_to_clear:
                 if key in st.session_state:
                     del st.session_state[key]
-            
+
             # Also clear saved inputs from database
             save_last_inputs({})
-            
+
             st.success("✅ All cleared! Starting fresh.")
             st.rerun()
-    
+
     with col2:
         if st.button("❌ Cancel", use_container_width=True):
             st.session_state['confirm_reset'] = False
@@ -205,25 +205,25 @@ if st.session_state.get('confirm_delete', False):
     delete_entry = st.session_state.get('delete_entry')
     st.warning(f"⚠️ Delete edit: {delete_entry['description']}?")
     st.write("This will remove this edit and revert to the previous state.")
-    
+
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
         if st.button("✅ Yes, Delete", type="primary", use_container_width=True, key="confirm_delete_btn"):
             delete_idx = st.session_state.get('delete_index')
-            
+
             # Remove the edit from history
             if delete_idx < len(st.session_state['edit_history']):
                 st.session_state['edit_history'].pop(delete_idx)
-            
+
             # Rebuild schedule from scratch based on remaining history
             # TODO: Implement replay logic if needed, or just remove from display
-            
+
             st.session_state['confirm_delete'] = False
             st.session_state['delete_index'] = None
             st.session_state['delete_entry'] = None
             st.success("✅ Edit deleted")
             st.rerun()
-    
+
     with col2:
         if st.button("❌ Cancel", use_container_width=True, key="cancel_delete_btn"):
             st.session_state['confirm_delete'] = False
@@ -369,7 +369,7 @@ if generate_button:
                 'ro_ra_officers': ro_ra_officers.strip(),
                 'beam_width': beam_width
             }
-            
+
             save_last_inputs(save_inputs_dict)
 
             # Save to history
@@ -396,7 +396,7 @@ if generate_button:
             # Initialize edited_schedule
             if 'edited_schedule' not in st.session_state:
                 st.session_state['edited_schedule'] = officer_schedule.copy()
-            
+
             # Add "Initialized Schedule" to edit history (only once)
             if not st.session_state.get('schedule_initialized', False):
                 st.session_state['edit_history'] = [{
@@ -604,34 +604,34 @@ if 'generated_schedule' in st.session_state and st.session_state['generated_sche
     st.markdown("---")
     st.title("🗓️ Roster Editor")
     st.markdown("Add SOS officers or make manual adjustments to the generated roster")
-    
+
     # Initialize editor state
     if 'edited_schedule' not in st.session_state:
         st.session_state['edited_schedule'] = st.session_state['generated_schedule'].copy()
     if 'edit_history' not in st.session_state:
         st.session_state['edit_history'] = []
-    
+
     officer_schedule = st.session_state['edited_schedule']
     officer_ids = sorted(get_all_officer_ids(officer_schedule))  # Sort to show M, S, OT officers
     time_slots = generate_time_slots(START_HOUR, NUM_SLOTS)
 
     # Convert to matrix for display
     roster_matrix = schedule_to_matrix(officer_schedule)
-    
+
     # Edit operations - go straight to tabs
     st.subheader("Edit Operations")
-    
+
     tab1, tab2, tab3 = st.tabs(["➕ Add SOS Officers", "🔄 Swap", "🗑️ Delete"])
-    
+
     # TAB 1: ADD SOS OFFICERS
     with tab1:
-        
+
         # Initialize SOS session state if not exists
         if 'sos_extracted_data' not in st.session_state:
             st.session_state.sos_extracted_data = []
         if 'sos_confirmed' not in st.session_state:
             st.session_state.sos_confirmed = False
-        
+
         st.markdown(
             """
             <div style="border: 1px solid white; border-radius: 8px; padding: 10px;">
@@ -650,7 +650,7 @@ if 'generated_schedule' in st.session_state and st.session_state['generated_sche
             """,
             unsafe_allow_html=True
         )
-        
+
         example_raw_text = '''ACAR SOS AM
 02 x GC
 
@@ -665,7 +665,7 @@ officer C
 officer D
 
 officer E (1000-1130)'''
-        
+
         input_method_add = st.radio(
             "Choose input method:",
             ["📋 Raw Text (Auto-extract)", "✏️ Manual Format (Legacy)"],
@@ -673,7 +673,7 @@ officer E (1000-1130)'''
             horizontal=True,
             key="add_sos_method"
         )
-        
+
         if input_method_add == "📋 Raw Text (Auto-extract)":
             raw_sos_text_add = st.text_area(
                 "Paste the SOS timings msg from Ops Room",
@@ -682,7 +682,7 @@ officer E (1000-1130)'''
                 help="Paste the SOS timings msg from Ops Room",
                 key="raw_sos_add"
             )
-            
+
             col1, col2, col3 = st.columns([1, 1, 4])
             with col1:
                 extract_button_add = st.button("🔍 Extract", use_container_width=True, key="extract_add")
@@ -691,7 +691,7 @@ officer E (1000-1130)'''
                     reset_button_add = st.button("🔄 Reset", use_container_width=True, key="reset_add")
                 else:
                     reset_button_add = False
-            
+
             if extract_button_add:
                 if raw_sos_text_add.strip():
                     try:
@@ -706,24 +706,24 @@ officer E (1000-1130)'''
                         st.error(f"❌ Extraction failed: {str(e)}")
                 else:
                     st.warning("⚠️ Please enter raw text first")
-            
+
             if reset_button_add:
                 st.session_state.sos_extracted_data = []
                 st.session_state.sos_confirmed = False
                 st.rerun()
-            
+
             # Display and edit extracted data
             if st.session_state.sos_extracted_data:
                 st.markdown("### 📊 Extracted Officer Timings (Editable)")
                 st.info("💡 Review and edit the extracted data below. Check the boxes to include officers in the schedule.")
-                
+
                 # Convert to DataFrame for editing
                 df_sos = pd.DataFrame(st.session_state.sos_extracted_data).reset_index(drop=True)
-                
+
                 # Add a 'selected' column if it doesn't exist
                 if 'selected' not in df_sos.columns:
                     df_sos.insert(0, 'selected', True)
-                
+
                 # Editable data editor with checkbox column
                 edited_df_sos = st.data_editor(
                     df_sos,
@@ -751,27 +751,27 @@ officer E (1000-1130)'''
                     },
                     key="sos_data_editor_add"
                 )
-                
+
                 # Update session state with edited data
                 st.session_state.sos_extracted_data = edited_df_sos.to_dict('records')
-                
+
                 # Show summary of selected rows
                 selected_count = edited_df_sos['selected'].sum() if 'selected' in edited_df_sos.columns else len(edited_df_sos)
                 st.caption(f"📊 {selected_count} of {len(edited_df_sos)} officers selected")
-                
+
                 # Add to roster button
                 col1, col2, col3 = st.columns([1, 1, 4])
                 with col1:
                     if st.button("✅ Add to Roster", use_container_width=True, type="primary", key="add_sos_to_roster"):
                         # Filter for selected rows with valid data
                         selected_df = edited_df_sos[edited_df_sos['selected'] == True].copy()
-                        
+
                         # Validate that selected rows have both name and timing
                         invalid_rows = selected_df[
                             (selected_df['name'].isna() | (selected_df['name'] == '')) |
                             (selected_df['timing'].isna() | (selected_df['timing'] == ''))
                         ]
-                        
+
                         if not invalid_rows.empty:
                             st.error(f"⚠️ {len(invalid_rows)} selected row(s) have missing name or timing.")
                         elif len(selected_df) == 0:
@@ -782,66 +782,72 @@ officer E (1000-1130)'''
                                 (selected_df['name'].notna()) & (selected_df['name'] != '') &
                                 (selected_df['timing'].notna()) & (selected_df['timing'] != '')
                             ]
-                            
+
                             if len(valid_df) > 0:
                                 sos_timings_list = valid_df['timing'].tolist()
                                 sos_timings_str_add = ", ".join(sos_timings_list)
-                                
+
                                 # Use the schedule manager to add SOS officers
                                 try:
                                     with st.spinner("Adding SOS officers to roster..."):
-                                        manager = st.session_state.get('schedule_manager')
-                                        
-                                        if manager:
-                                            # Use incremental add method
-                                            results = manager.add_sos_to_existing_schedule(
-                                                sos_timings=sos_timings_str_add
-                                            )
-                                            
-                                            counter_matrix, final_counter_matrix, officer_schedule, output_text = results
-                                            
-                                            # Update session state with INCREMENTAL addition
-                                            st.session_state['edited_schedule'] = officer_schedule
-                                            st.session_state['final_counter_matrix'] = final_counter_matrix
-                                            st.session_state['output_text'] = output_text
-                                            st.session_state['schedule_manager'] = manager
-                                            
-                                            # Add to edit history with detailed info
-                                            edit_entry = {
-                                                'type': 'add_sos',
-                                                'description': f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist()[:3])}{'...' if len(valid_df) > 3 else ''}",
-                                                'timestamp': pd.Timestamp.now(),
-                                                'data': {
-                                                    'sos_count': len(sos_timings_list),
-                                                    'sos_names': valid_df['name'].tolist(),
-                                                    'sos_timings': sos_timings_str_add
-                                                }
+                                        # Get the original inputs from session state
+                                        saved_inputs_dict = st.session_state.get('saved_inputs', {})
+
+                                        # Create new manager with same mode
+                                        manager = ScheduleManager(mode=OperationMode(operation_mode))
+
+                                        # Re-run the full algorithm WITH SOS officers
+                                        results = manager.run_algorithm(
+                                            main_officers_reported=saved_inputs_dict.get('main_officers', ''),
+                                            report_gl_counters=saved_inputs_dict.get('gl_counters', ''),
+                                            sos_timings=sos_timings_str_add,  # Add SOS timings
+                                            ro_ra_officers=saved_inputs_dict.get('ro_ra_officers', ''),
+                                            handwritten_counters=saved_inputs_dict.get('handwritten_counters', ''),
+                                            ot_counters=saved_inputs_dict.get('ot_counters', ''),
+                                        )
+
+                                        counter_matrix, final_counter_matrix, officer_schedule, output_text = results
+
+                                        # Update session state with new results
+                                        st.session_state['edited_schedule'] = officer_schedule
+                                        st.session_state['final_counter_matrix'] = final_counter_matrix
+                                        st.session_state['output_text'] = output_text
+                                        st.session_state['schedule_manager'] = manager
+
+                                        # Add to edit history with detailed info
+                                        edit_entry = {
+                                            'type': 'add_sos',
+                                            'description': f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist()[:3])}{'...' if len(valid_df) > 3 else ''}",
+                                            'timestamp': pd.Timestamp.now(),
+                                            'data': {
+                                                'sos_count': len(sos_timings_list),
+                                                'sos_names': valid_df['name'].tolist(),
+                                                'sos_timings': sos_timings_str_add
                                             }
-                                            st.session_state['edit_history'].append(edit_entry)
-                                            
-                                            # Save to database
-                                            save_roster_edit(
-                                                edit_type='add_sos',
-                                                officer_id=f"{len(sos_timings_list)} SOS officers",
-                                                slot_start=0,
-                                                slot_end=47,
-                                                time_start="10:00",
-                                                time_end="22:00",
-                                                roster_history_id=st.session_state.get('roster_history_id'),
-                                                notes=f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist())}"
-                                            )
-                                            
-                                            st.success(f"✅ Added {len(sos_timings_list)} SOS officers to roster")
-                                            st.session_state.sos_extracted_data = []
-                                            st.session_state.sos_confirmed = False
-                                            st.rerun()
-                                        else:
-                                            st.error("❌ Schedule manager not found. Please regenerate the schedule.")
+                                        }
+                                        st.session_state['edit_history'].append(edit_entry)
+
+                                        # Save to database
+                                        save_roster_edit(
+                                            edit_type='add_sos',
+                                            officer_id=f"{len(sos_timings_list)} SOS officers",
+                                            slot_start=0,
+                                            slot_end=47,
+                                            time_start="10:00",
+                                            time_end="22:00",
+                                            roster_history_id=st.session_state.get('roster_history_id'),
+                                            notes=f"Added {len(sos_timings_list)} SOS officers: {', '.join(valid_df['name'].tolist())}"
+                                        )
+
+                                        st.success(f"✅ Added {len(sos_timings_list)} SOS officers to roster")
+                                        st.session_state.sos_extracted_data = []
+                                        st.session_state.sos_confirmed = False
+                                        st.rerun()
                                 except Exception as e:
                                     st.error(f"❌ Error adding SOS officers: {str(e)}")
                                     if show_debug:
                                         st.exception(e)
-            
+
         else:  # Manual Format
             sos_timings_manual = st.text_area(
                 "SOS Timings (Manual Format)",
@@ -850,65 +856,71 @@ officer E (1000-1130)'''
                 help="SOS officer timings in manual format",
                 key="manual_sos_add"
             )
-            
+
             if st.button("✅ Add to Roster", use_container_width=True, type="primary", key="add_manual_sos"):
                 if sos_timings_manual.strip():
                     try:
                         with st.spinner("Adding SOS officers to roster..."):
-                            manager = st.session_state.get('schedule_manager')
-                            
+                            # Get the original inputs from session state
+                            saved_inputs_dict = st.session_state.get('saved_inputs', {})
+
                             # Count SOS officers added
                             sos_count = len(sos_timings_manual.strip().split(','))
-                            
-                            if manager:
-                                # Use incremental add method
-                                results = manager.add_sos_to_existing_schedule(
-                                    sos_timings=sos_timings_manual.strip()
-                                )
-                                
-                                counter_matrix, final_counter_matrix, officer_schedule, output_text = results
-                                
-                                # Update session state
-                                st.session_state['edited_schedule'] = officer_schedule
-                                st.session_state['final_counter_matrix'] = final_counter_matrix
-                                st.session_state['output_text'] = output_text
-                                st.session_state['schedule_manager'] = manager
-                                
-                                # Add to edit history
-                                edit_entry = {
-                                    'type': 'add_sos',
-                                    'description': f"Added {sos_count} SOS officers (manual)",
-                                    'timestamp': pd.Timestamp.now(),
-                                    'data': {
-                                        'sos_count': sos_count,
-                                        'sos_timings': sos_timings_manual.strip()
-                                    }
+
+                            # Create new manager with same mode
+                            manager = ScheduleManager(mode=OperationMode(operation_mode))
+
+                            # Re-run the full algorithm WITH SOS officers
+                            results = manager.run_algorithm(
+                                main_officers_reported=saved_inputs_dict.get('main_officers', ''),
+                                report_gl_counters=saved_inputs_dict.get('gl_counters', ''),
+                                sos_timings=sos_timings_manual.strip(),  # Add SOS timings
+                                ro_ra_officers=saved_inputs_dict.get('ro_ra_officers', ''),
+                                handwritten_counters=saved_inputs_dict.get('handwritten_counters', ''),
+                                ot_counters=saved_inputs_dict.get('ot_counters', ''),
+                            )
+
+                            counter_matrix, final_counter_matrix, officer_schedule, output_text = results
+
+                            # Update session state
+                            st.session_state['edited_schedule'] = officer_schedule
+                            st.session_state['final_counter_matrix'] = final_counter_matrix
+                            st.session_state['output_text'] = output_text
+                            st.session_state['schedule_manager'] = manager
+
+                            # Add to edit history
+                            edit_entry = {
+                                'type': 'add_sos',
+                                'description': f"Added {sos_count} SOS officers (manual)",
+                                'timestamp': pd.Timestamp.now(),
+                                'data': {
+                                    'sos_count': sos_count,
+                                    'sos_timings': sos_timings_manual.strip()
                                 }
-                                st.session_state['edit_history'].append(edit_entry)
-                                
-                                # Save to database
-                                save_roster_edit(
-                                    edit_type='add_sos',
-                                    officer_id=f"{sos_count} SOS officers",
-                                    slot_start=0,
-                                    slot_end=47,
-                                    time_start="10:00",
-                                    time_end="22:00",
-                                    roster_history_id=st.session_state.get('roster_history_id'),
-                                    notes=f"Added {sos_count} SOS officers manually: {sos_timings_manual.strip()}"
-                                )
-                                
-                                st.success(f"✅ Added {sos_count} SOS officers to roster")
-                                st.rerun()
-                            else:
-                                st.error("❌ Schedule manager not found. Please regenerate the schedule.")
+                            }
+                            st.session_state['edit_history'].append(edit_entry)
+
+                            # Save to database
+                            save_roster_edit(
+                                edit_type='add_sos',
+                                officer_id=f"{sos_count} SOS officers",
+                                slot_start=0,
+                                slot_end=47,
+                                time_start="10:00",
+                                time_end="22:00",
+                                roster_history_id=st.session_state.get('roster_history_id'),
+                                notes=f"Added {sos_count} SOS officers manually: {sos_timings_manual.strip()}"
+                            )
+
+                            st.success(f"✅ Added {sos_count} SOS officers to roster")
+                            st.rerun()
                     except Exception as e:
                         st.error(f"❌ Error adding SOS officers: {str(e)}")
                         if show_debug:
                             st.exception(e)
                 else:
                     st.warning("⚠️ Please enter SOS timings first")
-    
+
     # TAB 2: SWAP
     with tab2:
         st.write("Swap counter assignments between two officers")
@@ -918,10 +930,10 @@ officer E (1000-1130)'''
         with col1:
             swap_officer1 = st.selectbox("Officer 1", officer_ids, key="swap_off1")
         with col2:
-            swap_officer2 = st.selectbox("Officer 2", officer_ids, 
+            swap_officer2 = st.selectbox("Officer 2", officer_ids,
                                          index=min(1, len(officer_ids)-1),
                                          key="swap_off2")
-        
+
         col3, col4 = st.columns(2)
         with col3:
             swap_start = st.selectbox("From Time", time_slots, key="swap_start")
@@ -929,7 +941,7 @@ officer E (1000-1130)'''
             swap_end = st.selectbox("To Time", time_slots,
                                     index=min(47, hhmm_to_slot(swap_start) + 3),
                                     key="swap_end")
-        
+
         if st.button("Swap Assignments", type="primary", key="swap_btn"):
             if swap_officer1 == swap_officer2:
                 st.error("❌ Cannot swap officer with themselves")
@@ -937,24 +949,24 @@ officer E (1000-1130)'''
                 # Refresh roster matrix from current edited_schedule
                 officer_ids = sorted(get_all_officer_ids(st.session_state['edited_schedule']))
                 roster_matrix = schedule_to_matrix(st.session_state['edited_schedule'])
-                
+
                 officer1_idx = officer_ids.index(swap_officer1)
                 officer2_idx = officer_ids.index(swap_officer2)
                 start_idx = hhmm_to_slot(swap_start)
                 end_idx = hhmm_to_slot(swap_end)
-                
+
                 if start_idx < end_idx:
                     # Perform swap operation (end_idx is exclusive, so no +1 needed)
                     temp = roster_matrix[officer1_idx, start_idx:end_idx].copy()
                     roster_matrix[officer1_idx, start_idx:end_idx] = roster_matrix[officer2_idx, start_idx:end_idx]
                     roster_matrix[officer2_idx, start_idx:end_idx] = temp
-                    
+
                     # Update edited_schedule in session state
                     st.session_state['edited_schedule'] = matrix_to_schedule(roster_matrix, officer_ids)
-                    
+
                     # Calculate display end time
                     display_end_time = get_slot_end_time(end_idx - 1)
-                    
+
                     # Save to database
                     save_roster_edit(
                         edit_type='swap',
@@ -967,7 +979,7 @@ officer E (1000-1130)'''
                         roster_history_id=st.session_state.get('roster_history_id'),
                         notes=f"Swapped {swap_officer1} ↔ {swap_officer2} from {swap_start} to {display_end_time}"
                     )
-                    
+
                     # Add to edit history
                     edit_entry = {
                         'type': 'swap',
@@ -983,7 +995,7 @@ officer E (1000-1130)'''
                         }
                     }
                     st.session_state['edit_history'].append(edit_entry)
-                    
+
                     st.success(f"✅ Swapped {swap_officer1} ↔ {swap_officer2} from {swap_start} to {display_end_time}")
                     st.rerun()
                 else:
@@ -991,36 +1003,36 @@ officer E (1000-1130)'''
     # TAB 3: DELETE
     with tab3:
         st.write("Remove officer assignment from specified time range")
-        
+
         col1, col2, col3 = st.columns(3)
         with col1:
             del_officer = st.selectbox("Officer", officer_ids, key="del_officer")
         with col2:
             del_start = st.selectbox("From Time", time_slots, key="del_start")
         with col3:
-            del_end = st.selectbox("To Time", time_slots, 
+            del_end = st.selectbox("To Time", time_slots,
                                    index=min(47, hhmm_to_slot(del_start) + 3),
                                    key="del_end")
-        
+
         if st.button("Delete Assignment", type="primary", key="del_btn"):
             # Refresh roster matrix from current edited_schedule
             officer_ids = sorted(get_all_officer_ids(st.session_state['edited_schedule']))
             roster_matrix = schedule_to_matrix(st.session_state['edited_schedule'])
-            
+
             officer_idx = officer_ids.index(del_officer)
             start_idx = hhmm_to_slot(del_start)
             end_idx = hhmm_to_slot(del_end)
-            
+
             if start_idx < end_idx:
                 # Perform delete operation (end_idx is exclusive, so no +1 needed)
                 roster_matrix[officer_idx, start_idx:end_idx] = 0
-                
+
                 # Update edited_schedule in session state
                 st.session_state['edited_schedule'] = matrix_to_schedule(roster_matrix, officer_ids)
-                
+
                 # Calculate display end time
                 display_end_time = get_slot_end_time(end_idx - 1)
-                
+
                 # Save to database
                 save_roster_edit(
                     edit_type='delete',
@@ -1032,7 +1044,7 @@ officer E (1000-1130)'''
                     roster_history_id=st.session_state.get('roster_history_id'),
                     notes=f"Deleted {del_officer} from {del_start} to {display_end_time}"
                 )
-                
+
                 # Add to edit history
                 edit_entry = {
                     'type': 'delete',
@@ -1047,7 +1059,7 @@ officer E (1000-1130)'''
                     }
                 }
                 st.session_state['edit_history'].append(edit_entry)
-                
+
                 st.success(f"✅ Deleted {del_officer} from {del_start} to {display_end_time}")
                 st.rerun()
             else:
@@ -1055,14 +1067,14 @@ officer E (1000-1130)'''
     # Display updated visualizations after edits
     st.markdown("---")
     st.subheader("📊 Updated Timetables (After Edits)")
-    
+
     # Re-initialize plotter for edited schedule
     plotter = Plotter(
         num_slots=NUM_SLOTS,
         num_counters=num_counters,
         start_hour=START_HOUR
     )
-    
+
     # Show Final Counter Timetable (Graph B - with SOS)
     if 'final_counter_matrix' in st.session_state:
         st.markdown("### 📊 Final Counter Timetable (Including SOS Officers)")
@@ -1070,7 +1082,7 @@ officer E (1000-1130)'''
             st.session_state['final_counter_matrix']
         )
         st.plotly_chart(fig_final, use_container_width=True, key="fig_final_updated")
-        
+
         # Show updated statistics
         if 'output_text' in st.session_state and len(st.session_state['output_text']) > 1:
             st.text_area(
@@ -1079,16 +1091,16 @@ officer E (1000-1130)'''
                 height=400,
                 key="stats_text_updated"
             )
-    
+
     # Show Officer Schedule (Graph C)
     st.markdown("### 👮 Individual Officer Schedules")
     fig_edited = plotter.plot_officer_schedule_with_labels(st.session_state['edited_schedule'])
     st.plotly_chart(fig_edited, use_container_width=True, key="fig_edited_schedule")
-    
+
     # Show edit summary
     if st.session_state['edit_history']:
         st.info(f"✏️ Total edits made: {len(st.session_state['edit_history'])}")
-    
+
     # Officer schedule download button
     officer_schedule_text = "Officer Schedules (After Edits)\n" + "=" * 50 + "\n\n"
     for officer_key, schedule in st.session_state['edited_schedule'].items():
@@ -1106,8 +1118,8 @@ officer E (1000-1130)'''
         key="download_officer_schedules_edited",
         use_container_width=False
     )
-    
-    
+
+
     # Database edit history viewer (keep at bottom)
 with st.expander("🗄️ View Database Edit History"):
     recent_edits = get_roster_edits(limit=20)
@@ -1133,8 +1145,8 @@ st.markdown(
     """
     <div style='text-align: center; color: gray; font-size: 12px;'>
         <p>AC Roster Generator | Morning Shift Planning Tool</p>
-        <p>Powered by ScheduleManager OOP Architecture v3.3 🚀</p>
-        <p>Now with restructured UI flow: Add SOS via Roster Editor!</p>
+        <p>Powered by Refactored OOP Architecture v4.0 🚀</p>
+        <p>New modular design with improved maintainability!</p>
         <p>For issues or suggestions, please contact your system administrator.</p>
     </div>
     """,

@@ -1,0 +1,145 @@
+"""
+ROSTER ALGORITHM - OOP ARCHITECTURE DIAGRAM
+============================================
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     algorithm_orchestrator.py                            │
+│                   RosterAlgorithmOrchestrator                            │
+│                                                                           │
+│  Main coordinator that orchestrates the entire roster generation process │
+│  Entry Point: run_algo() or RosterAlgorithmOrchestrator.run()           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                ┌───────────────────┼───────────────────┐
+                │                   │                   │
+                ▼                   ▼                   ▼
+    ┌───────────────────┐ ┌─────────────────┐ ┌──────────────────┐
+    │ roster_builder.py │ │ sos_scheduler.py│ │ optimization.py  │
+    ├───────────────────┤ ├─────────────────┤ ├──────────────────┤
+    │ RosterBuilder     │ │ SOSOfficerBuilder│ │ ScheduleOptimizer│
+    │ ┌───────────────┐ │ │ ┌─────────────┐ │ │ ┌──────────────┐ │
+    │ │Build main     │ │ │ │Parse SOS    │ │ │ │Beam search   │ │
+    │ │officers       │ │ │ │availability │ │ │ │optimization  │ │
+    │ │with templates │ │ │ │             │ │ │ │              │ │
+    │ └───────────────┘ │ │ └─────────────┘ │ │ └──────────────┘ │
+    │                   │ │                 │ │                  │
+    │LastCounterAssigner│ │BreakSchedule    │ │ SegmentTree      │
+    │ ┌───────────────┐ │ │Generator        │ │ ┌──────────────┐ │
+    │ │Assign last    │ │ │ ┌─────────────┐ │ │ │Score tracking│ │
+    │ │counters to    │ │ │ │Generate     │ │ │ │and penalties │ │
+    │ │eligible       │ │ │ │valid break  │ │ │ │              │ │
+    │ │officers       │ │ │ │schedules    │ │ │ │              │ │
+    │ └───────────────┘ │ │ └─────────────┘ │ │ └──────────────┘ │
+    └───────────────────┘ └─────────────────┘ └──────────────────┘
+                │                   │                   │
+                └───────────────────┼───────────────────┘
+                                    ▼
+                        ┌───────────────────────┐
+                        │ assignment_engine.py  │
+                        ├───────────────────────┤
+                        │CounterAssignmentEngine│
+                        │ ┌───────────────────┐ │
+                        │ │Convert officers   │ │
+                        │ │to counter matrix  │ │
+                        │ │Add OT officers    │ │
+                        │ └───────────────────┘ │
+                        │                       │
+                        │ SOSAssignmentEngine   │
+                        │ ┌───────────────────┐ │
+                        │ │Gap-aware greedy   │ │
+                        │ │interval packing   │ │
+                        │ │Priority-based     │ │
+                        │ │assignment         │ │
+                        │ └───────────────────┘ │
+                        │                       │
+                        │ MatrixConverter       │
+                        │ ┌───────────────────┐ │
+                        │ │Convert between    │ │
+                        │ │matrix formats     │ │
+                        │ └───────────────────┘ │
+                        └───────────────────────┘
+                                    │
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+        ┌──────────────────┐           ┌──────────────────┐
+        │ statistics.py    │           │ time_utils.py    │
+        ├──────────────────┤           ├──────────────────┤
+        │StatisticsGen     │           │ TimeConverter    │
+        │┌────────────────┐│           │┌────────────────┐│
+        ││Generate manning││           ││HHMM ↔ slot     ││
+        ││statistics      ││           ││conversion      ││
+        ││by zone/time    ││           ││                ││
+        │└────────────────┘│           │└────────────────┘│
+        └──────────────────┘           └──────────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+                        CORE DEPENDENCIES
+
+┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+│ config.py    │    │ officer.py   │    │ counter.py   │
+├──────────────┤    ├──────────────┤    ├──────────────┤
+│OperationMode │    │ MainOfficer  │    │ Counter      │
+│ MODE_CONFIG  │    │ SOSOfficer   │    │CounterMatrix │
+│ NUM_SLOTS    │    │ OTOfficer    │    │              │
+│ START_HOUR   │    │              │    │              │
+└──────────────┘    └──────────────┘    └──────────────┘
+
+═══════════════════════════════════════════════════════════════════════
+
+                      ALGORITHM WORKFLOW
+
+1. BUILD MAIN OFFICERS (roster_builder.py)
+   ├─ Parse reported officers
+   ├─ Apply roster templates
+   ├─ Apply RA/RO adjustments
+   ├─ Apply ground level counters
+   └─ Apply takeover counters
+
+2. ASSIGN LAST COUNTERS (roster_builder.py)
+   ├─ Identify eligible officers (id % 4 == 3)
+   ├─ Find empty counters from slot 42
+   └─ Assign by priority
+
+3. ADD OT OFFICERS (assignment_engine.py)
+   └─ Assign OT officers to first 2 slots
+
+4. PROCESS SOS OFFICERS (if provided)
+   ├─ BUILD (sos_scheduler.py)
+   │  ├─ Parse availability
+   │  └─ Extract pre-assigned counters
+   │
+   ├─ GENERATE BREAKS (sos_scheduler.py)
+   │  ├─ Find consecutive work stretches
+   │  ├─ Place breaks recursively
+   │  └─ Validate max 10 consecutive slots
+   │
+   ├─ OPTIMIZE (optimization.py)
+   │  ├─ Beam search across all officers
+   │  ├─ Minimize manning fluctuations
+   │  └─ Maximize coverage
+   │
+   └─ ASSIGN TO COUNTERS (assignment_engine.py)
+      ├─ Priority 1: Pre-assigned counters
+      ├─ Priority 2: Partial counters (connected)
+      ├─ Priority 3: Used SOS counters (connected)
+      └─ Priority 4: Counter priority list
+
+5. GENERATE STATISTICS (statistics.py)
+   ├─ Count manning by zone
+   ├─ Filter relevant time slots
+   └─ Format output
+
+═══════════════════════════════════════════════════════════════════════
+
+                    KEY DESIGN PRINCIPLES
+
+✓ Single Responsibility: Each class has one clear purpose
+✓ Dependency Injection: Components receive dependencies
+✓ Interface Segregation: Clear, minimal interfaces
+✓ Open/Closed: Easy to extend, no need to modify
+✓ Backward Compatibility: Maintains original API
+✓ Testability: Components can be tested independently
+
+═══════════════════════════════════════════════════════════════════════
+"""
