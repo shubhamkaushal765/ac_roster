@@ -368,7 +368,7 @@ def officers_to_counter_matrix(officers: Dict[str, Officer], mode: OperationMode
     Returns:
         CounterMatrix object with all officer assignments
     """
-    counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode if mode is not None else MODE)
+    counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode)
 
     for officer_key, officer in officers.items():
         for slot, counter in enumerate(officer.schedule):
@@ -782,7 +782,7 @@ def add_sos_officers(
     """
     # Create copies for manipulation
     sos_main_counter_matrix = main_counter_matrix.copy()
-    sos_counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode if mode is not None else MODE)
+    sos_counter_matrix = CounterMatrix(num_slots=NUM_SLOTS, mode=mode)
     cfg = MODE_CONFIG[mode]
     num_counters = cfg['num_counters']
     counter_priority_list = cfg['counter_priority_list']
@@ -979,9 +979,7 @@ def merge_prefixed_matrices(counter_matrix, sos_matrix):
 
 def generate_statistics(counter_matrix: np.ndarray, mode: OperationMode = None):
     """Generate manning statistics from counter matrix."""
-    if mode is None:
-        mode = MODE  # fallback to global
-    
+
     statistics_list = []
     counter_matrix = np.array(counter_matrix)
     num_rows, num_slots = counter_matrix.shape
