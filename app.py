@@ -11,86 +11,14 @@ import re
 from acroster import Plotter
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 from acroster.orchestrator_pipe import RosterAlgorithmOrchestrator
-
-from acroster.time_utils import hhmm_to_slot, slot_to_hhmm, generate_time_slots
+from acroster.schedule_utils import get_all_officer_ids, schedule_to_matrix, matrix_to_schedule
+from acroster.time_utils import hhmm_to_slot, slot_to_hhmm, generate_time_slots, get_slot_end_time, clean_time, extract_officer_timings
 from acroster.database import get_db_instance
 from acroster.db_handlers import (
     save_last_inputs, get_last_inputs, save_roster_history,
     save_roster_edit, get_roster_edits
 )
 
-def get_slot_end_time(slot_idx: int) -> str:
-    """Get the end time of a slot (start time + 15 minutes)"""
-    return slot_to_hhmm(slot_idx + 1)
-# === Raw Text Extraction Functions ===
-def clean_time(t):
-    """Cleans timing text by removing 'ish' and spaces."""
-    t = t.lower().replace("ish", "")
-    t = t.replace(" ", "")
-    return t if re.match(r'\d{4}-\d{4}', t) else None
-
-def extract_officer_timings(full_text):
-    """Extract officer timings from raw text format."""
-    blocks = re.split(r'\n(?=\d{2}\s*x\s*)', full_text.strip(), flags=re.IGNORECASE)
-    final_records = []
-
-    for block in blocks:
-        if not block.strip():
-            continue
-
-        base_parentheses = re.search(r'\(([^)]*?\d{4}.*?\d{4}[^)]*?)\)', block)
-        if not base_parentheses:
-            continue
-
-        base_text = base_parentheses.group(1)
-        raw_base_times = re.split(r'[/,&]', base_text)
-        base_times = []
-        for t in raw_base_times:
-            cleaned = clean_time(t)
-            if cleaned:
-                base_times.append(cleaned)
-
-        officer_lines = re.findall(r'(?:[-*]\s*)?([A-Za-z0-9@_ ]+(?:\([^)]*\))?)', block)
-        officer_lines = [l.strip() for l in officer_lines if l.strip() and not re.match(r'\d{2}\s*x', l)]
-
-        for line in officer_lines:
-            name = re.sub(r'\(.*?\)', '', line).strip()
-
-            extra_match = re.search(r'\(([^)]*?)\)', line)
-            if extra_match:
-                extra_raw = extra_match.group(1)
-                extra_clean = clean_time(extra_raw)
-            else:
-                extra_clean = None
-
-            combined_times = base_times.copy()
-            if extra_clean:
-                combined_times.append(extra_clean)
-
-            timing_str = ";".join(combined_times)
-            final_records.append({
-                "name": name,
-                "timing": timing_str
-            })
-
-    return final_records
-
-
-def get_all_officer_ids(officer_schedule: dict) -> list:
-    """Extract all officer IDs from the schedule"""
-    return list(officer_schedule.keys())
-
-def schedule_to_matrix(officer_schedule: dict) -> np.ndarray:
-    """Convert officer schedule dictionary to numpy matrix"""
-    officer_ids = get_all_officer_ids(officer_schedule)
-    matrix = np.zeros((len(officer_ids), 48), dtype=int)
-    for i, officer_id in enumerate(officer_ids):
-        matrix[i, :] = officer_schedule[officer_id]
-    return matrix
-
-def matrix_to_schedule(matrix: np.ndarray, officer_ids: list) -> dict:
-    """Convert numpy matrix back to officer schedule dictionary"""
-    return {officer_ids[i]: matrix[i, :] for i in range(len(officer_ids))}
 
 # === Streamlit setup ===
 # === Initialize Edit History at Page Load ===
