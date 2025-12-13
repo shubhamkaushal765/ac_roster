@@ -466,7 +466,7 @@ def run_algo(
         self.statistics
     ) = results
 
-    return resulst
+    return results
 
 
 
