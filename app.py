@@ -10,7 +10,8 @@ import re
 
 from acroster import Plotter
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
-from acroster.schedule_manager import ScheduleManager
+from acroster.orchestrator_pipe import RosterAlgorithmOrchestrator
+
 from acroster.time_utils import hhmm_to_slot, slot_to_hhmm, generate_time_slots
 from acroster.database import get_db_instance
 from acroster.db_handlers import (
@@ -164,7 +165,7 @@ with st.sidebar:
 
     # Quick stats if schedule exists
     if 'generated_schedule' in st.session_state:
-        counts = st.session_state.get('schedule_manager', None)
+        counts = st.session_state.get('orchestrator', None)
         if counts:
             counts_dict = counts.get_all_officers_count()
             st.metric("Total Officers", counts_dict['total'])
@@ -181,7 +182,7 @@ if st.session_state.get('confirm_reset', False):
             # Clear all session state related to schedules
             keys_to_clear = [
                 'generated_schedule', 'counter_matrix', 'final_counter_matrix',
-                'output_text', 'roster_history_id', 'schedule_manager',
+                'output_text', 'roster_history_id', 'orchestrator',
                 'edited_schedule', 'edit_history', 'schedule_initialized',
                 'sos_extracted_data', 'sos_confirmed', 'saved_inputs',
                 'confirm_reset', 'reset_index'
@@ -325,11 +326,12 @@ if generate_button:
         try:
             # Show loading spinner
             with st.spinner("Generating schedule... Please wait."):
-                # Create ScheduleManager
-                manager = ScheduleManager(mode=OperationMode(operation_mode))
+                # Create Orchestrator
+                orchestrator = RosterAlgorithmOrchestrator(mode=OperationMode.ARRIVAL)
+
 
                 # Run the roster algorithm WITHOUT SOS officers initially
-                results = manager.run_algorithm(
+                results = orchestrator.run(
                     main_officers_reported=main_officers_validated,
                     report_gl_counters=report_gl_counters.strip(),
                     sos_timings="",  # Empty SOS timings initially
@@ -344,7 +346,7 @@ if generate_button:
             st.success("✅ Schedule generated successfully!")
 
             # Display officer counts
-            counts = manager.get_all_officers_count()
+            counts = orchestrator.get_officer_counts()
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("👮 Main Officers", counts['main'])
@@ -356,7 +358,7 @@ if generate_button:
                 st.metric("📊 Total Officers", counts['total'])
 
             # Show optimization penalty if available
-            penalty = manager.get_optimization_penalty()
+            penalty = orchestrator.penalty
             if penalty is not None:
                 st.info(f"🎯 Optimization Penalty: {penalty:.2f}")
 
@@ -390,7 +392,8 @@ if generate_button:
             st.session_state['final_counter_matrix'] = final_counter_matrix
             st.session_state['output_text'] = output_text
             st.session_state['roster_history_id'] = roster_history_id
-            st.session_state['schedule_manager'] = manager
+            st.session_state['orchestrator'] = orchestrator
+
             st.session_state['saved_inputs'] = save_inputs_dict
 
             # Initialize edited_schedule
@@ -501,15 +504,15 @@ if generate_button:
                     st.write("**Final Counter Matrix (first 5 rows):**")
                     st.dataframe(final_counter_matrix[:5, :10])
 
-                with st.expander("📊 ScheduleManager State & Officer Details"):
-                    st.write("**Manager State:**")
-                    st.code(str(manager))
+                with st.expander("📊 Orchestrator State & Officer Details"):
+                    st.write("**Orchestrator State:**")
+                    st.code(str(orchestrator))
 
                     st.write("**Officer Breakdown:**")
 
                     # Main officers
                     st.write("**Main Officers:**")
-                    main_officers = manager.get_main_officers()
+                    main_officers = orchestrator.get_main_officers()
                     if main_officers:
                         main_officers_info = []
                         for key, officer in list(main_officers.items())[:5]:
@@ -529,7 +532,7 @@ if generate_button:
 
                     # SOS officers
                     st.write("**SOS Officers:**")
-                    sos_officers = manager.get_sos_officers()
+                    sos_officers = orchestrator.get_sos_officers()
                     if sos_officers:
                         sos_officers_info = []
                         for officer in sos_officers[:5]:
@@ -552,7 +555,7 @@ if generate_button:
 
                     # OT officers
                     st.write("**OT Officers:**")
-                    ot_officers = manager.get_ot_officers()
+                    ot_officers = orchestrator.get_ot_officers()
                     if ot_officers:
                         ot_officers_info = []
                         for officer in ot_officers:
@@ -569,7 +572,7 @@ if generate_button:
 
                     # Export data structure
                     st.write("**Export Data Structure:**")
-                    export_data = manager.export_schedules_to_dict()
+                    export_data = orchestrator.export_schedules_to_dict()
                     st.json(
                         {
                             'keys': list(export_data.keys()),
@@ -580,7 +583,7 @@ if generate_button:
                     )
 
                 st.info(
-                    "✨ Using ScheduleManager class with OOP architecture | "
+                    "✨ Using Orchestrator class with OOP architecture | "
                     "Counter and CounterMatrix classes | "
                     "Enhanced state management and debugging capabilities"
                 )
@@ -787,17 +790,18 @@ officer E (1000-1130)'''
                                 sos_timings_list = valid_df['timing'].tolist()
                                 sos_timings_str_add = ", ".join(sos_timings_list)
 
-                                # Use the schedule manager to add SOS officers
+                                # Use the orchestrator to add SOS officers
                                 try:
                                     with st.spinner("Adding SOS officers to roster..."):
                                         # Get the original inputs from session state
                                         saved_inputs_dict = st.session_state.get('saved_inputs', {})
 
-                                        # Create new manager with same mode
-                                        manager = ScheduleManager(mode=OperationMode(operation_mode))
+                                        # Create new orchestrator with same mode
+                                        orchestrator = RosterAlgorithmOrchestrator(mode=OperationMode.ARRIVAL)
+
 
                                         # Re-run the full algorithm WITH SOS officers
-                                        results = manager.run_algorithm(
+                                        results = orchestrator.run(
                                             main_officers_reported=saved_inputs_dict.get('main_officers', ''),
                                             report_gl_counters=saved_inputs_dict.get('gl_counters', ''),
                                             sos_timings=sos_timings_str_add,  # Add SOS timings
@@ -812,7 +816,8 @@ officer E (1000-1130)'''
                                         st.session_state['edited_schedule'] = officer_schedule
                                         st.session_state['final_counter_matrix'] = final_counter_matrix
                                         st.session_state['output_text'] = output_text
-                                        st.session_state['schedule_manager'] = manager
+                                        st.session_state['orchestrator'] = orchestrator
+
 
                                         # Add to edit history with detailed info
                                         edit_entry = {
@@ -867,11 +872,12 @@ officer E (1000-1130)'''
                             # Count SOS officers added
                             sos_count = len(sos_timings_manual.strip().split(','))
 
-                            # Create new manager with same mode
-                            manager = ScheduleManager(mode=OperationMode(operation_mode))
+                            # Create new orchestrator with same mode
+                            orchestrator = RosterAlgorithmOrchestrator(mode=OperationMode.ARRIVAL)
+
 
                             # Re-run the full algorithm WITH SOS officers
-                            results = manager.run_algorithm(
+                            results = orchestrator.run(
                                 main_officers_reported=saved_inputs_dict.get('main_officers', ''),
                                 report_gl_counters=saved_inputs_dict.get('gl_counters', ''),
                                 sos_timings=sos_timings_manual.strip(),  # Add SOS timings
@@ -886,7 +892,8 @@ officer E (1000-1130)'''
                             st.session_state['edited_schedule'] = officer_schedule
                             st.session_state['final_counter_matrix'] = final_counter_matrix
                             st.session_state['output_text'] = output_text
-                            st.session_state['schedule_manager'] = manager
+                            st.session_state['orchestrator'] = orchestrator
+
 
                             # Add to edit history
                             edit_entry = {

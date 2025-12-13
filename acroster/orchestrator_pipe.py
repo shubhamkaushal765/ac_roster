@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple
 import numpy as np
 
 from acroster.config import MODE_CONFIG, OperationMode
-from acroster.officer import MainOfficer, SOSOfficer
+from acroster.officer import MainOfficer, SOSOfficer, OTOfficer
 from acroster.counter import CounterMatrix
 from acroster.roster_builder import RosterBuilder, LastCounterAssigner
 from acroster.sos_scheduler import SOSOfficerBuilder, BreakScheduleGenerator
@@ -35,7 +35,9 @@ class RosterAlgorithmOrchestrator:
     - Statistics generation
     """
 
-    def __init__(self, mode: OperationMode):
+    def __init__(self, mode: OperationMode = OperationMode.ARRIVAL,
+        num_slots: int = 48,
+        start_hour: int = 10):
         """
         Initialize the orchestrator.
 
@@ -44,6 +46,21 @@ class RosterAlgorithmOrchestrator:
         """
         self.mode = mode
         self.config = MODE_CONFIG[mode]
+        self.num_slots: int = 48,
+        self.start_hour: int = 10
+
+        # Get configuration for this mode
+        cfg = MODE_CONFIG[mode]
+        self.num_counters = cfg["num_counters"]
+        self.counter_priority_list = cfg["counter_priority_list"]
+
+        # Officer collections (populated after running algorithm)
+        self.main_officers: Dict[str, MainOfficer] = {}
+        self.sos_officers: List[SOSOfficer] = []
+        self.ot_officers: List[OTOfficer] = []
+
+        # other variables
+        self.penalty: float | None = None
 
         # Initialize subsystems
         self.roster_builder = RosterBuilder(mode)
@@ -55,6 +72,13 @@ class RosterAlgorithmOrchestrator:
         self.sos_engine = SOSAssignmentEngine(mode)
         self.stats_generator = StatisticsGenerator(mode)
         self.matrix_converter = MatrixConverter()
+
+        #results
+        self.main_counter_matrix_np: Optional[np.ndarray] = None
+        self.final_counter_matrix_np: Optional[np.ndarray] = None
+        self.officer_schedules: Optional[Dict[str, List[int]]] = None
+        self.statistics: Optional[List[str]] = None
+        self.optimization_penalty: Optional[float] = None
 
     def run(
             self,
@@ -91,6 +115,7 @@ class RosterAlgorithmOrchestrator:
             ro_ra_officers,
             handwritten_counters
         )
+        self.main_officers = main_officers
 
         # Step 2: Assign last counters
         print("\n=== Step 2: Assigning Last Counters ===")
@@ -106,6 +131,7 @@ class RosterAlgorithmOrchestrator:
             main_officers,
             ot_counters
         )
+        self.ot_officers = ot_officers
 
         # Generate first statistics
         stats1 = self.stats_generator.generate_statistics(
@@ -121,6 +147,9 @@ class RosterAlgorithmOrchestrator:
                 counter_matrix_with_ot
             )
 
+            # self.sos_officers = sos_officers
+            # self.penalty = min_penalty
+            self.officer_schedules = officer_schedule
             return (
                 counter_matrix_with_ot.to_matrix(),
                 final_matrix,
@@ -135,6 +164,7 @@ class RosterAlgorithmOrchestrator:
             }
 
             main_matrix = counter_matrix_with_ot.to_matrix()
+            self.officer_schedules = officer_schedule
             return (
                 main_matrix,
                 main_matrix,
@@ -225,43 +255,39 @@ class RosterAlgorithmOrchestrator:
         return counter_matrix_with_ot, ot_officers
 
     def _process_sos_officers(
-            self,
-            sos_timings: str,
-            main_officers: Dict[str, MainOfficer],
-            counter_matrix_with_ot: CounterMatrix
-    ) -> Tuple[np.ndarray, Dict, str]:
+        self,
+        sos_timings: str,
+        main_officers: Dict[str, MainOfficer],
+        counter_matrix_with_ot: CounterMatrix
+        ) -> Tuple[np.ndarray, Dict, str]:
         """Process SOS officers: build, optimize, and assign."""
+
+        if len(sos_timings) == 0:
+            # No SOS officers - build schedule from main officers only
+            officer_schedule = {k: v.schedule.tolist() for k, v in main_officers.items()}
+            final_matrix = counter_matrix_with_ot.to_matrix()
+            stats2 = self.stats_generator.generate_statistics(final_matrix)
+            return final_matrix, officer_schedule, stats2
+
         # Build SOS officers
         sos_officers, pre_assigned_counter_dict = self.sos_builder.build_sos_officers(
             sos_timings
         )
-        print(f"Built {len(sos_officers)} SOS officers")
-        print(f"Pre-assigned counters: {pre_assigned_counter_dict}")
-
-        # Generate break schedules
         sos_officers = self.break_generator.generate_break_schedules(sos_officers)
 
-        # Optimize schedule selection
         chosen_indices, best_work_count, min_penalty = self.optimizer.optimize(
             sos_officers,
             main_officers
         )
-        print(f"Optimization penalty: {min_penalty}")
-        print(f"Best work count summary: min={best_work_count.min()}, "
-              f"max={best_work_count.max()}, mean={best_work_count.mean():.1f}")
 
-        # Get working intervals for SOS officers
         schedule_intervals_to_officers = self._extract_working_intervals(sos_officers)
-        print(f"Schedule intervals to officers: {schedule_intervals_to_officers}")
 
-        # Assign SOS officers to counters
         sos_counter_matrix = self.sos_engine.assign_sos_officers(
             pre_assigned_counter_dict,
             schedule_intervals_to_officers,
             counter_matrix_with_ot
         )
 
-        # Merge matrices
         main_matrix = counter_matrix_with_ot.to_matrix()
         sos_matrix = sos_counter_matrix.to_matrix()
 
@@ -297,6 +323,104 @@ class RosterAlgorithmOrchestrator:
                 )
 
         return schedule_intervals_to_officers
+    def get_main_officers(self) -> Dict[str, MainOfficer]:
+        return self.main_officers
+
+    def get_sos_officers(self) -> List[SOSOfficer]:
+        return self.sos_officers
+
+    def get_ot_officers(self) -> List[OTOfficer]:
+        return self.ot_officers
+
+    def get_officer_counts(self) -> Dict[str, int]:
+        return {
+            "main": len(self.main_officers),
+            "sos": len(self.sos_officers),
+            "ot": len(self.ot_officers),
+            "total": len(self.main_officers) + len(self.sos_officers) + len(self.ot_officers),
+        }
+    
+    def get_all_officers_count(self) -> Dict[str, int]:
+        """
+        Get count of each officer type from schedules.
+
+        Returns:
+            Dictionary with counts: {'main': X, 'sos': Y, 'ot': Z, 'total': T}
+        """
+        if self.officer_schedules is None:
+            return {'main': 0, 'sos': 0, 'ot': 0, 'total': 0}
+
+        main_count = sum(1 for k in self.officer_schedules.keys() if k.startswith('M'))
+        sos_count = sum(1 for k in self.officer_schedules.keys() if k.startswith('S'))
+        ot_count = sum(1 for k in self.officer_schedules.keys() if k.startswith('OT'))
+
+        return {
+            'main': main_count,
+            'sos': sos_count,
+            'ot': ot_count,
+            'total': main_count + sos_count + ot_count
+        }
+
+
+    def get_optimization_penalty(self) -> float | None:
+        return self.penalty
+
+    def export_schedules_to_dict(self) -> Dict:
+        """
+        Export all scheduling data to a dictionary format.
+
+        Returns:
+            Dictionary containing all scheduling information
+        """
+        return {
+            'mode': self.mode.value,
+            'officer_schedules': self.officer_schedules,
+            'statistics': self.statistics,
+            'optimization_penalty': self.optimization_penalty,
+            'officer_counts': self.get_all_officers_count(),
+            'config': {
+                'num_slots': self.num_slots,
+                'num_counters': self.num_counters,
+                'start_hour': self.start_hour
+            }
+        }
+    def print_summary(self):
+        """Print a detailed summary of the scheduling results."""
+        if not self._has_run:
+            print("Algorithm has not been run yet. Call run_algorithm() first.")
+            return
+
+        print("\n" + "=" * 70)
+        print("SCHEDULING SUMMARY")
+        print("=" * 70)
+
+        # Officer counts
+        counts = self.get_all_officers_count()
+        print(f"\nOfficers Scheduled:")
+        print(f"  Main Officers (M):   {counts['main']:3d}")
+        print(f"  SOS Officers (S):    {counts['sos']:3d}")
+        print(f"  OT Officers (OT):    {counts['ot']:3d}")
+        print(f"  {'─' * 25}")
+        print(f"  Total:               {counts['total']:3d}")
+
+        # Optimization info
+        if self.optimization_penalty is not None:
+            print(f"\nOptimization Penalty: {self.optimization_penalty:.2f}")
+
+        # Matrix info
+        if self.main_counter_matrix_np is not None:
+            print(f"\nCounter Matrix Shape: {self.main_counter_matrix_np.shape}")
+            print(f"  Counters: {self.main_counter_matrix_np.shape[0]}")
+            print(f"  Time Slots: {self.main_counter_matrix_np.shape[1]}")
+
+        # Statistics preview
+        if self.statistics:
+            print("\n" + "─" * 70)
+            print("Statistics Preview:")
+            print("─" * 70)
+            print(self.statistics[0][:400] + "...")
+
+        print("\n" + "=" * 70)
 
 
 # Convenience function for backward compatibility
@@ -325,7 +449,7 @@ def run_algo(
         Tuple of (main_matrix, final_matrix, officer_schedule, statistics)
     """
     orchestrator = RosterAlgorithmOrchestrator(mode)
-    return orchestrator.run(
+    results = orchestrator.run(
         main_officers_reported,
         report_gl_counters,
         sos_timings,
@@ -333,6 +457,17 @@ def run_algo(
         handwritten_counters,
         ot_counters
     )
+
+    # Unpack results
+    (
+        self.main_counter_matrix_np,
+        self.final_counter_matrix_np,
+        self.officer_schedules,
+        self.statistics
+    ) = results
+
+    return resulst
+
 
 
 if __name__ == "__main__":
