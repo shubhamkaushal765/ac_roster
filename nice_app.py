@@ -3,17 +3,21 @@ NiceGUI web application for AC Roster Generation (Morning Shift)
 Refactored for maintainability and scalability
 """
 
-from nicegui import ui, app
+from nicegui import ui
 import pandas as pd
 import traceback
+import re
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
-
 from acroster import Plotter
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 from acroster.orchestrator_pipe import RosterAlgorithmOrchestrator
 from acroster.db_handlers import save_last_inputs, get_last_inputs
+from acroster.time_utils import hhmm_to_slot, generate_time_slots, get_end_time_slots
+from acroster.schedule_utils import schedule_to_matrix, get_all_officer_ids
+from acroster.statistics import StatisticsGenerator
+
 
 
 @dataclass
@@ -40,6 +44,8 @@ class FormInputs:
         self.ro_ra_officers: Optional[ui.input] = None
         self.beam_width: Optional[ui.slider] = None
         self.show_debug: Optional[ui.checkbox] = None
+        self.form_container: Optional[ui.column] = None 
+        self.toggle_form_btn: Optional[ui.button] = None 
         
     def get_values(self) -> Dict[str, Any]:
         """Extract all input values as a dictionary"""
@@ -81,16 +87,26 @@ class RosterGenerationUI:
         self.result_container: Optional[ui.column] = None
         self.summary_html: Optional[ui.html] = None
         self.spinner: Optional[ui.spinner] = None
+        self.sidebar_container: Optional[ui.column] = None
+        self.edited_schedule: Optional[Dict] = None
+        self.current_orchestrator = None
+        self.current_values = None
+        self.timetable_history = []  # List of (fig, stats, timestamp, description) tuples
+        self.schedule_history = []   # List of (fig, timestamp, descriptio
+        self.timetable_carousel: Optional[ui.carousel] = None
+        self.schedule_carousel: Optional[ui.carousel] = None
+
         
     def render(self):
         """Render the complete UI"""
         self._render_header()
-        
+
         with ui.row().style("width: 100%"):
-            with ui.column().style("flex: 4"):
+            with ui.column().style("flex: 3"):
                 self._render_main_form()
                 self.result_container = ui.column()
-            with ui.column().style("flex: 1"):
+            with ui.column().style("flex: 2"):
+                self.sidebar_container = ui.column().style("width: 100%")
                 self._render_sidebar()
     
     def _render_header(self):
@@ -99,28 +115,154 @@ class RosterGenerationUI:
         ui.label("💡 For better display on mobile, please enable Desktop site in your browser settings.")\
             .style("font-size:14px; color:gray; margin-top:-10px;")
     
-    def _render_sidebar(self):
-        """Render sidebar content"""
-        ui.label('Side bar')
-    
+    def _render_sidebar(self):  
+        """Render sidebar content with horizontal tabs and sub-tabs"""
+        with self.sidebar_container:
+            ui.label('🗂️ Roster Editor').classes('text-lg font-bold')
+
+            if self.edited_schedule is None:
+                ui.label(
+                    "ℹ️ No schedule generated yet. Please generate a schedule first."
+                ).style("color: gray; font-size: 14px;")
+            else:
+                
+                def natural_sort_key(s):
+                    return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', s)]
+
+                officer_ids = sorted(get_all_officer_ids(self.edited_schedule), key=natural_sort_key)
+                time_slots = generate_time_slots(START_HOUR, NUM_SLOTS)
+
+                # Horizontal tabs for Add / Swap / Delete
+                with ui.tabs().props('dense align=justify').classes('w-full') as main_tabs:
+                    add_tab = ui.tab('➕ Add')
+                    swap_tab = ui.tab('🔄 Swap')
+                    delete_tab = ui.tab('🗑️ Delete')
+
+                with ui.tab_panels(main_tabs, value=add_tab, animated=False).classes('w-full'):
+                    # ---------------- Add SOS Officers Panel ----------------
+                    with ui.tab_panel(add_tab):
+                        ui.label("Paste list of SOS officers given by Ops Rm here")
+                        with ui.tabs().props('dense align=justify').classes('w-full') as add_subtabs:
+                            raw_tab = ui.tab('Text Input (Recommended)')
+                            manual_tab = ui.tab('Manual Input')
+                        
+                        with ui.tab_panels(add_subtabs, value=raw_tab, animated = False).classes('w-full'):
+                            # Raw Input Panel
+                            with ui.tab_panel(raw_tab):
+                                raw_sos_input = ui.textarea(
+                                    label='Paste SOS timings (raw format)',
+                                    placeholder='ACAR SOS AM\n02 x GC\n...',
+                                    value='',
+                                ).classes('w-full').props('rows=8')
+                                ui.button(
+                                    '🔍 Extract SOS Officers',
+                                    on_click=lambda: self._extract_sos_officers(raw_sos_input.value)
+                                ).props('color=primary')
+                            
+                            # Manual Input Panel
+                            with ui.tab_panel(manual_tab):
+                                ui.markdown(
+                                    """
+                                **Example:** (AC22)1000-1300, 2000-2200, 1315-1430;2030-2200, (AC23)1000-1130;1315-1430;2030-2200  
+                                **Format:** (`<optional counter no. at 1000>)<sos_timing>`  
+                                If an officer has multiple SOS timings, separate them with semicolons `;`.  
+                                Optional pre-assigned counters must be enclosed in parentheses `()` before the time.
+                                """
+                                )
+                                manual_sos_input = ui.textarea(
+                                    label='Manual SOS Timings',
+                                    placeholder='(AC22)1000-1300;1315-1430,...',
+                                    value='',
+                                ).classes('w-full').props('rows=4')
+                                ui.button(
+                                    '✅ Add Manual SOS Officers',
+                                    on_click=lambda: self._add_manual_sos(manual_sos_input.value)
+                                ).props('color=secondary')
+                    
+                    # ---------------- Swap Assignments Panel ----------------
+                    with ui.tab_panel(swap_tab):
+                        swap_officer1 = ui.select(
+                            label='Officer 1',
+                            options=officer_ids,
+                            value=officer_ids[0] if officer_ids else None
+                        ).classes('w-full')
+                        swap_officer2 = ui.select(
+                            label='Officer 2',
+                            options=officer_ids,
+                            value=officer_ids[1] if len(officer_ids) > 1 else officer_ids[0]
+                        ).classes('w-full')
+                        swap_start = ui.select(
+                            label='From Time',
+                            options=time_slots,
+                            value=time_slots[0]
+                        ).classes('w-full')
+                        swap_end = ui.select(
+                            label='To Time',
+                            options=get_end_time_slots(time_slots),
+                            value=get_end_time_slots(time_slots)[1]
+                        ).classes('w-full')
+                        
+                        ui.button(
+                            'Swap Assignments',
+                            on_click=lambda: self._swap_assignments(
+                                swap_officer1.value,
+                                swap_officer2.value,
+                                swap_start.value,
+                                swap_end.value
+                            )
+                        ).props('color=primary')
+                    
+                    # ---------------- Delete Assignments Panel ----------------
+                    with ui.tab_panel(delete_tab):
+                        del_officer = ui.select(
+                            label='Officer',
+                            options=officer_ids,
+                            value=officer_ids[0] if officer_ids else None
+                        ).classes('w-full')
+                        del_start = ui.select(
+                            label='From Time',
+                            options=time_slots,
+                            value=time_slots[0]
+                        ).classes('w-full')
+                        del_end = ui.select(
+                            label='To Time',
+                            options=get_end_time_slots(time_slots),
+                            value=get_end_time_slots(time_slots)[1]
+                        ).classes('w-full')
+                        
+                        ui.button(
+                            'Delete Assignment',
+                            on_click=lambda: self._delete_assignment(
+                                del_officer.value,
+                                del_start.value,
+                                del_end.value
+                            )
+                        ).props('color=negative')
     def _render_main_form(self):
         """Render the main form with stepper"""
-        # Summary card
+        # Summary card with toggle button
         with ui.card().classes('w-full mb-4'):
-            ui.label('Your Inputs:').classes('text-bold')
+            with ui.row().classes('w-full items-center justify-between'):
+                ui.label('Your Inputs:').classes('text-bold')
+                self.toggle_form_btn = ui.button(
+                    icon='expand_less',
+                    on_click=self._toggle_form_visibility
+                ).props('flat dense').tooltip('Show/Hide Form')
+            
             self.summary_html = ui.html('', sanitize=False)
             self._update_summary()
         
-        # Stepper
-        with ui.stepper().props('vertical').classes('w-full') as stepper:
-            self._render_step_main_officers(stepper)
-            self._render_step_gl_counters(stepper)
-            self._render_step_handwritten(stepper)
-            self._render_step_ot_counters(stepper)
-            self._render_step_ro_ra(stepper)
-            self._render_step_optional(stepper)
-            self._render_step_generate(stepper)
-    
+        # Stepper in a collapsible container
+        self.form_container = ui.column().classes('w-full')
+        with self.form_container:
+            with ui.stepper().props('vertical').classes('w-full') as stepper:
+                self._render_step_main_officers(stepper)
+                self._render_step_gl_counters(stepper)
+                self._render_step_handwritten(stepper)
+                self._render_step_ot_counters(stepper)
+                self._render_step_ro_ra(stepper)
+                self._render_step_optional(stepper)
+                self._render_step_generate(stepper)
     def _render_step_main_officers(self, stepper):
         """Step 1: Main Officers"""
         with ui.step("Main Officers"):
@@ -143,6 +285,12 @@ class RosterGenerationUI:
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self._update_summary(), stepper.next()))
+                ui.button(
+                    '🚀 Quick Generate Schedule',
+                    on_click=self._run_generation,
+                    color='primary'
+                ).classes('w-full mb-2')
+
     
     def _render_step_gl_counters(self, stepper):
         """Step 2: GL Counters"""
@@ -269,6 +417,11 @@ class RosterGenerationUI:
             
             self.spinner.visible = False
             ui.notify('✅ Schedule generated successfully!', type='positive')
+            self._hide_form_after_generation()
+            # Store the schedule and orchestrator for editing
+            self.edited_schedule = officer_schedule.copy()
+            self.current_orchestrator = orchestrator
+            self.current_values = values
             
             # Save inputs
             save_last_inputs({
@@ -290,6 +443,11 @@ class RosterGenerationUI:
                     output_text,
                     values
                 )
+            
+            # Update sidebar to show roster editor
+            self.sidebar_container.clear()
+            with self.sidebar_container:
+                self._render_sidebar()
         
         except Exception as e:
             self.spinner.visible = False
@@ -300,7 +458,7 @@ class RosterGenerationUI:
                     ui.code(traceback.format_exc())
     
     def _render_results(self, orchestrator, counter_matrix, final_counter_matrix, 
-                       officer_schedule, output_text, values):
+                    officer_schedule, output_text, values):
         """Render all result visualizations and data"""
         config = MODE_CONFIG[OperationMode(values['operation_mode'])]
         
@@ -317,21 +475,26 @@ class RosterGenerationUI:
             num_counters=config['num_counters'],
             start_hour=START_HOUR,
         )
+
+        timestamp = datetime.now().strftime("%H%M")
         
-        # Main timetable
-        self._render_main_timetable(plotter, counter_matrix, output_text[0])
+        # Graph 1: Counter Timetable (starts with counter_matrix)
+        fig1 = plotter.plot_officer_timetable_with_labels(counter_matrix)
+        description1 = "Initial schedule generated"
+        self.timetable_history = [(fig1, output_text[0], timestamp, description1)]
+        self._render_timetable_gallery()
         
-        # Final timetable
-        self._render_final_timetable(plotter, final_counter_matrix, output_text[1])
-        
-        # Officer schedules
-        self._render_officer_schedules(plotter, officer_schedule)
+        # Graph 2: Officer Schedules
+        fig2 = plotter.plot_officer_schedule_with_labels(officer_schedule)
+        description2 = "Initial schedule generated"
+        self.schedule_history = [(fig2, timestamp, description2)]
+        self._render_schedule_gallery()
         
         # Debug info
         if values['show_debug']:
             self._render_debug_info(counter_matrix, final_counter_matrix, 
-                                   officer_schedule, orchestrator)
-    
+                                officer_schedule, orchestrator)
+                                
     def _render_officer_metrics(self, orchestrator):
         """Render officer count metrics"""
         counts = orchestrator.get_officer_counts()
@@ -347,44 +510,60 @@ class RosterGenerationUI:
                     with ui.card().classes('w-full text-center p-4'):
                         ui.label(title).classes('text-sm text-gray-500')
                         ui.label(str(value)).classes('text-3xl font-bold')
-    
-    def _render_main_timetable(self, plotter, counter_matrix, stats_text):
-        """Render main officer timetable"""
+    def _render_timetable_gallery(self):
+
+        """Render carousel gallery for counter timetable"""
         ui.separator()
-        ui.label('📊 Timetable (Main Officers Only)').classes('text-lg font-bold')
+        ui.label('📊 Counter Timetable History').classes('text-lg font-bold')
+        ui.label(f'Showing {len(self.timetable_history)} version(s) - Swipe to see history').classes('text-sm text-gray-500')
         
-        fig = plotter.plot_officer_timetable_with_labels(counter_matrix)
-        ui.plotly(fig).classes('w-full')
-        
-        ui.textarea(
-            label='Counter Manning Statistics',
-            value=stats_text,
-        ).classes('w-full h-64')
-    
-    def _render_final_timetable(self, plotter, final_counter_matrix, stats_text):
-        """Render final timetable with SOS"""
+        with ui.carousel(animated=True, arrows=True, navigation=True).props('height=1000px').classes('w-full'):
+            for idx, (fig, stats, timestamp, description) in enumerate(reversed(self.timetable_history)):
+                with ui.carousel_slide(name=f'timetable_{len(self.timetable_history) - idx - 1}'):
+                    with ui.column().classes('w-full'):
+                        # Version header
+                        if idx == 0:
+                            ui.label(f'📌 Latest - {timestamp}').classes('text-lg font-bold mb-1 text-primary')
+                        else:
+                            ui.label(f'{timestamp}').classes('text-lg font-bold mb-1 text-gray-600')
+                        
+                        # Description
+                        ui.markdown(description).classes('text-sm text-gray-700 mb-3 whitespace-pre-line')
+                        
+                        # Graph (fixed height, no scroll needed)
+                        ui.plotly(fig).classes('w-full')
+                        
+                        # Stats (scrollable if needed)
+                        ui.textarea(
+                            label='Counter Manning Statistics',
+                            value=stats,
+                        ).classes('w-full').props('rows=10')
+
+    def _render_schedule_gallery(self):
+        """Render carousel gallery for officer schedules"""
         ui.separator()
-        ui.label('📊 Timetable (Including SOS Officers)').classes('text-lg font-bold')
-        ui.label('ℹ️ No SOS officers added yet. Use the Roster Editor below to add SOS officers.')
+        ui.label('👮 Officer Schedule History').classes('text-lg font-bold')
+        ui.label(f'Showing {len(self.schedule_history)} version(s) - Swipe to see history').classes('text-sm text-gray-500')
         
-        fig = plotter.plot_officer_timetable_with_labels(final_counter_matrix)
-        ui.plotly(fig).classes('w-full')
-        
-        ui.textarea(
-            label='Counter Manning Statistics (with SOS)',
-            value=stats_text,
-        ).classes('w-full h-64')
-    
-    def _render_officer_schedules(self, plotter, officer_schedule):
-        """Render individual officer schedules"""
-        ui.separator()
-        ui.label('👮 Individual Officer Schedules').classes('text-lg font-bold')
-        
-        fig = plotter.plot_officer_schedule_with_labels(officer_schedule)
-        ui.plotly(fig).classes('w-full')
+        with ui.carousel(animated=True, arrows=True, navigation=True).props('height=700px').classes('w-full'):
+            for idx, (fig, timestamp, description) in enumerate(reversed(self.schedule_history)):
+                with ui.carousel_slide(name=f'schedule_{len(self.schedule_history) - idx - 1}'):
+                    with ui.column().classes('w-full'):
+                        # Version header
+                        if idx == 0:
+                            ui.label(f'📌 Latest - {timestamp}').classes('text-lg font-bold mb-1 text-primary')
+                        else:
+                            ui.label(f'{timestamp}').classes('text-lg font-bold mb-1 text-gray-600')
+                        
+                        # Description
+                        ui.markdown(description).classes('text-sm text-gray-700 mb-3 whitespace-pre-line')
+                        
+                        # Graph (fixed height, no scroll needed since no stats)
+                        ui.plotly(fig).classes('w-full').style('height: 600px;')
+
     
     def _render_debug_info(self, counter_matrix, final_counter_matrix, 
-                          officer_schedule, orchestrator):
+                        officer_schedule, orchestrator):
         """Render debug information"""
         ui.separator()
         ui.label('🔍 Debug Information').classes('text-lg font-bold')
@@ -414,13 +593,305 @@ class RosterGenerationUI:
             ui.label('OT Officers')
             for o in orchestrator.get_ot_officers():
                 ui.label(f'{o.officer_key} → counter {o.counter_no}')
+    
+    # === Roster Editor Methods ===
+    
+    def _extract_sos_officers(self, raw_text: str):
+        """Extract SOS officers from raw text format"""
+        if not raw_text.strip():
+            ui.notify("⚠️ Please paste SOS timings", type='warning')
+            return
+        
+        try:
+            from acroster.time_utils import extract_officer_timings
+            
+            # Extract timings from raw text
+            sos_timings_str = extract_officer_timings(raw_text)
+            
+            if not sos_timings_str:
+                ui.notify("⚠️ No valid SOS timings found", type='warning')
+                return
+            
+            # Re-run orchestrator with SOS timings
+            self._rerun_with_sos(sos_timings_str)
+            
+        except Exception as e:
+            ui.notify(f"❌ Error extracting SOS: {str(e)}", type='negative')
+            if self.inputs.show_debug.value:
+                ui.code(traceback.format_exc())
+    
+    def _add_manual_sos(self, manual_text: str):
+        """Add manually entered SOS officers"""
+        if not manual_text.strip():
+            ui.notify("⚠️ Please enter SOS timings", type='warning')
+            return
+        
+        try:
+            self._rerun_with_sos(manual_text.strip())
+        except Exception as e:
+            ui.notify(f"❌ Error adding SOS: {str(e)}", type='negative')
+            if self.inputs.show_debug.value:
+                ui.code(traceback.format_exc())
+    
+    def _rerun_with_sos(self, sos_timings: str):
+        """Re-run the orchestrator with SOS timings"""
+        if not self.current_orchestrator or not self.current_values:
+            ui.notify("⚠️ No schedule to update", type='warning')
+            return
+        
+        self.spinner.visible = True
+        
+        try:
+            from datetime import datetime
+            from acroster.statistics import StatisticsGenerator
+            from acroster.time_utils import extract_officer_timings
+            
+            # Create new orchestrator
+            orchestrator = RosterAlgorithmOrchestrator(
+                mode=OperationMode(self.current_values['operation_mode'])
+            )
+            
+            # Run with SOS timings
+            counter_matrix, final_counter_matrix, officer_schedule, output_text = orchestrator.run(
+                main_officers_reported=self.current_values['main_officers'],
+                report_gl_counters=self.current_values['gl_counters'],
+                sos_timings=sos_timings,
+                ro_ra_officers=self.current_values['ro_ra_officers'],
+                handwritten_counters=self.current_values['handwritten_counters'],
+                ot_counters=self.current_values['ot_counters'],
+            )
+            
+            self.spinner.visible = False
+            ui.notify('✅ Schedule updated with SOS officers!', type='positive')
+            
+            # Update stored schedule
+            self.edited_schedule = officer_schedule.copy()
+            self.current_orchestrator = orchestrator
+            
+            # Create plotter
+            config = MODE_CONFIG[OperationMode(self.current_values['operation_mode'])]
+            plotter = Plotter(
+                num_slots=NUM_SLOTS,
+                num_counters=config['num_counters'],
+                start_hour=START_HOUR,
+            )
+            
+            # Generate new figures
+            fig1 = plotter.plot_officer_timetable_with_labels(final_counter_matrix)
+            fig2 = plotter.plot_officer_schedule_with_labels(officer_schedule)
+            
+            # Calculate stats
+            stats_generator = StatisticsGenerator(OperationMode(self.current_values['operation_mode']))
+            stats = stats_generator.generate_statistics(final_counter_matrix)
+            
+            # Get timestamp
+            timestamp = datetime.now().strftime("%H%M")
+            
+            # Build description with SOS officer details
+            sos_officers = orchestrator.get_sos_officers()
+            if sos_officers:
+                description = f"Added {len(sos_officers)} SOS officer(s):\n"
+                for sos in sos_officers:
+                    description += f"• {sos.officer_key} at counter {sos.pre_assigned_counter}\n"
+            else:
+                description = "Added SOS officers"
+            
+            # Add to history
+            self.timetable_history.append((fig1, stats, timestamp, description))
+            self.schedule_history.append((fig2, timestamp, description))
+            
+            # Re-render galleries
+            self.result_container.clear()
+            with self.result_container:
+                self._render_officer_metrics(orchestrator)
+                self._render_timetable_gallery()
+                self._render_schedule_gallery()
+            
+        except Exception as e:
+            self.spinner.visible = False
+            ui.notify(f"❌ Error updating schedule: {str(e)}", type='negative')
+            if self.inputs.show_debug.value:
+                ui.code(traceback.format_exc())
+
+    def _swap_assignments(self, officer1: str, officer2: str, start_time: str, end_time: str):
+        """Swap counter assignments between two officers"""
+        if not all([officer1, officer2, start_time, end_time]):
+            ui.notify("⚠️ Please select all fields", type='warning')
+            return
+        
+        if officer1 == officer2:
+            ui.notify("⚠️ Please select different officers", type='warning')
+            return
+        
+        try:
+            # ADD THIS DEBUG CODE HERE:
+            print("=" * 80)
+            print("DEBUG INFO BEFORE SWAP:")
+            print(f"Number of officers in edited_schedule: {len(self.edited_schedule)}")
+            print(f"Officer IDs: {list(self.edited_schedule.keys())}")
+            print(f"NUM_SLOTS: {NUM_SLOTS}")
+            config = MODE_CONFIG[OperationMode(self.current_values['operation_mode'])]
+            print(f"config['num_counters']: {config['num_counters']}")
+            print("=" * 80)
+            
+            start_slot = hhmm_to_slot(start_time)
+            end_slot = hhmm_to_slot(end_time)
+            
+            if start_slot >= end_slot:
+                ui.notify("⚠️ Start time must be before end time", type='negative')
+                return
+            
+            # Swap assignments in edited_schedule
+            if officer1 in self.edited_schedule and officer2 in self.edited_schedule:
+                temp = self.edited_schedule[officer1][start_slot:end_slot].copy()
+                self.edited_schedule[officer1][start_slot:end_slot] = self.edited_schedule[officer2][start_slot:end_slot]
+                self.edited_schedule[officer2][start_slot:end_slot] = temp
+                
+                ui.notify(f"✅ Swapped {officer1} ↔ {officer2} from {start_time} to {end_time}", type='positive')
+                
+                # Create description
+                description = f"Swapped officers {officer1} and {officer2} from {start_time} to {end_time}"
+
+                # Re-render visualizations
+                self._update_visualizations()
+            else:
+                ui.notify("⚠️ Officer not found in schedule", type='warning')
+                
+        except Exception as e:
+            ui.notify(f"❌ Error swapping: {str(e)}", type='negative')
+    
+    def _delete_assignment(self, officer: str, start_time: str, end_time: str):
+        """Delete counter assignments for an officer"""
+        if not all([officer, start_time, end_time]):
+            ui.notify("⚠️ Please select all fields", type='warning')
+            return
+        
+        try:
+            
+            start_slot = hhmm_to_slot(start_time)
+            end_slot = hhmm_to_slot(end_time)
+            
+            if start_slot >= end_slot:
+                ui.notify("⚠️ Start time must be before end time", type='warning')
+                return
+            
+            # Delete assignments
+            if officer in self.edited_schedule:
+                self.edited_schedule[officer][start_slot:end_slot-1] = 0
+                
+                ui.notify(f"✅ Deleted assignments for {officer} from {start_time} to {end_time}", type='positive')
+                
+                # Create description
+                description = f"Deleted officer {officer} from {start_time} to {end_time}"
+            
+                # Re-render visualizations
+                self._update_visualizations()
+            else:
+                ui.notify("⚠️ Officer not found in schedule", type='warning')
+                
+        except Exception as e:
+            ui.notify(f"❌ Error deleting: {str(e)}", type='negative')
+    
+    def _update_visualizations(self, description: str = "Manual edit"):
+        """Update the schedule visualizations after editing"""
+        try:
+            
+            
+            config = MODE_CONFIG[OperationMode(self.current_values['operation_mode'])]
+            
+            # Convert edited schedule back to matrix
+            edited_matrix = schedule_to_matrix(
+                self.edited_schedule)
+            
+            # ADD THIS DEBUG CODE HERE:
+            print("=" * 80)
+            print("DEBUG INFO IN UPDATE_VISUALIZATIONS:")
+            print(f"edited_matrix shape: {edited_matrix.shape}")
+            print(f"Number of officers: {len(self.edited_schedule)}")
+            print(f"NUM_SLOTS: {NUM_SLOTS}")
+            print(f"config['num_counters']: {config['num_counters']}")
+            print(f"Expected matrix shape should be: (num_officers={len(self.edited_schedule)}, num_slots={NUM_SLOTS})")
+            print("=" * 80)
+            # Create plotter
+            plotter = Plotter(
+                num_slots=NUM_SLOTS,
+                num_counters=config['num_counters'],
+                start_hour=START_HOUR,
+            )
+            
+            # Generate BOTH figures
+            print("DEBUG: Step 4 - Calling plot_officer_timetable_with_labels")
+            fig1 = plotter.plot_officer_timetable_with_labels(edited_matrix)
+            print("DEBUG: Step 4 - COMPLETED")
+            
+            print("DEBUG: Step 5 - Calling plot_officer_schedule_with_labels")
+            fig2 = plotter.plot_officer_schedule_with_labels(self.edited_schedule)
+            print("DEBUG: Step 5 - COMPLETED")
+
+            # Calculate stats for Graph 1
+            print("DEBUG: Step 6 - Generating statistics")
+            stats_generator = StatisticsGenerator(OperationMode(self.current_values['operation_mode']))
+            stats = stats_generator.generate_statistics(edited_matrix)
+            print("DEBUG: Step 6 - COMPLETED")
+
+            # Get timestamp
+            print("DEBUG: Step 7 - Getting timestamp")
+            timestamp = datetime.now().strftime("%H%M")
+
+            # Add BOTH to history
+            print("DEBUG: Step 8 - Adding to history")
+            self.timetable_history.append((fig1, stats, timestamp, description))
+            self.schedule_history.append((fig2, timestamp, description))
+
+            # Re-render BOTH galleries
+            print("DEBUG: Step 9 - Clearing result container")
+            self.result_container.clear()
+            
+            print("DEBUG: Step 10 - Rendering galleries")
+            with self.result_container:
+                print("DEBUG: Step 10a - Rendering officer metrics")
+                self._render_officer_metrics(self.current_orchestrator)
+                
+                print("DEBUG: Step 10b - Rendering timetable gallery")
+                self._render_timetable_gallery()
+                
+                print("DEBUG: Step 10c - Rendering schedule gallery")
+                self._render_schedule_gallery()
+            
+            print("DEBUG: ALL STEPS COMPLETED!")
+            ui.notify('✅ Visualizations updated!', type='positive')
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print("=" * 80)
+            print("ERROR IN _UPDATE_VISUALIZATIONS:")
+            print(error_details)
+            print("=" * 80)
+            ui.notify(f"❌ Error updating visualizations: {str(e)}", type='negative')
+            
+    def _toggle_form_visibility(self):
+        """Toggle form visibility"""
+        if self.form_container.visible:
+            self.form_container.visible = False
+            self.toggle_form_btn.props('icon=expand_more')
+        else:
+            self.form_container.visible = True
+            self.toggle_form_btn.props('icon=expand_less')
+
+    def _hide_form_after_generation(self):
+        """Hide form after successful generation"""
+        if hasattr(self, 'form_container'):
+            self.form_container.visible = False
+            self.toggle_form_btn.props('icon=expand_more')
+
 
 
 def main():
     """Main entry point"""
     ui.window_title = "Generate ACar/DCar Roster Morning"
-    my_app = RosterGenerationUI()
-    my_app.render()
+    app = RosterGenerationUI()
+    app.render()
     ui.run()
 
 
