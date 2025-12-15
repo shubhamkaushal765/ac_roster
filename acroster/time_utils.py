@@ -6,6 +6,7 @@ Handles conversion between time slots and time strings (HHMM format).
 
 from datetime import datetime, timedelta
 import string
+import re
 from typing import List
 
 from acroster.config import NUM_SLOTS, START_HOUR
@@ -93,6 +94,18 @@ class TimeConverter:
             current += delta
 
         return times
+
+def get_end_time_slots(time_slots):
+    end_time_slots = []
+
+    for t in time_slots:
+        slot = hhmm_to_slot(t)
+        end_slot = slot + 1
+
+        if end_slot <= NUM_SLOTS:
+            end_time_slots.append(slot_to_hhmm(end_slot))
+    return (end_time_slots)
+
 
 
 # Global instance for backward compatibility
