@@ -3,10 +3,12 @@ NiceGUI web application for AC Roster Generation (Morning Shift)
 Refactored for maintainability and scalability
 """
 
-from nicegui import ui
+import os
+os.environ['NICEGUI_DISABLE_CSP'] = '1'
+import re
+from nicegui import ui, app
 import pandas as pd
 import traceback
-import re
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,11 +16,27 @@ from acroster import Plotter
 from acroster.config import NUM_SLOTS, START_HOUR, MODE_CONFIG, OperationMode
 from acroster.orchestrator_pipe import RosterAlgorithmOrchestrator
 from acroster.db_handlers import save_last_inputs, get_last_inputs
-from acroster.time_utils import hhmm_to_slot, generate_time_slots, get_end_time_slots
+from acroster.time_utils import hhmm_to_slot, generate_time_slots, get_end_time_slots, extract_officer_timings
 from acroster.schedule_utils import schedule_to_matrix, get_all_officer_ids
 from acroster.statistics import StatisticsGenerator
 
+# from starlette.middleware.base import BaseHTTPMiddleware
+# from starlette.requests import Request
 
+
+# class DisableCSPMiddleware(BaseHTTPMiddleware):
+#     async def dispatch(self, request: Request, call_next):
+#         response = await call_next(request)
+#         response.headers["Content-Security-Policy"] = (
+#             "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; "
+#             "script-src * data: blob: 'unsafe-inline' 'unsafe-eval'; "
+#             "style-src * data: blob: 'unsafe-inline'; "
+#             "connect-src * ws: wss:;"
+#         )
+#         return response
+
+
+# app.add_middleware(DisableCSPMiddleware)
 
 @dataclass
 class InputDefaults:
@@ -603,7 +621,7 @@ class RosterGenerationUI:
             return
         
         try:
-            from acroster.time_utils import extract_officer_timings
+            
             
             # Extract timings from raw text
             sos_timings_str = extract_officer_timings(raw_text)
@@ -642,9 +660,7 @@ class RosterGenerationUI:
         self.spinner.visible = True
         
         try:
-            from datetime import datetime
-            from acroster.statistics import StatisticsGenerator
-            from acroster.time_utils import extract_officer_timings
+            
             
             # Create new orchestrator
             orchestrator = RosterAlgorithmOrchestrator(
@@ -862,7 +878,6 @@ class RosterGenerationUI:
             ui.notify('✅ Visualizations updated!', type='positive')
             
         except Exception as e:
-            import traceback
             error_details = traceback.format_exc()
             print("=" * 80)
             print("ERROR IN _UPDATE_VISUALIZATIONS:")
@@ -890,9 +905,14 @@ class RosterGenerationUI:
 def main():
     """Main entry point"""
     ui.window_title = "Generate ACar/DCar Roster Morning"
-    app = RosterGenerationUI()
-    app.render()
-    ui.run()
+    myapp = RosterGenerationUI()
+    myapp.render()
+    # app.add_static_files('/_nicegui', 'nicegui')
+    # app.on_startup(lambda: None)
+    ui.run(
+        host='0.0.0.0',
+        port=int(os.environ.get('PORT', 3000)),
+    )
 
 
 if __name__ in {"__main__", "__mp_main__"}:
