@@ -4,7 +4,7 @@ Refactored for maintainability and scalability
 """
 
 import os
-os.environ['NICEGUI_DISABLE_CSP'] = '1'
+#os.environ['NICEGUI_DISABLE_CSP'] = '1'
 import re
 from nicegui import ui, app
 import pandas as pd
@@ -21,23 +21,34 @@ from acroster.time_utils import hhmm_to_slot, generate_time_slots, get_end_time_
 from acroster.schedule_utils import schedule_to_matrix, get_all_officer_ids
 from acroster.statistics import StatisticsGenerator
 
-# from starlette.middleware.base import BaseHTTPMiddleware
-# from starlette.requests import Request
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
-# class DisableCSPMiddleware(BaseHTTPMiddleware):
-#     async def dispatch(self, request: Request, call_next):
-#         response = await call_next(request)
-#         response.headers["Content-Security-Policy"] = (
-#             "default-src * data: blob: 'unsafe-inline' 'unsafe-eval'; "
-#             "script-src * data: blob: 'unsafe-inline' 'unsafe-eval'; "
-#             "style-src * data: blob: 'unsafe-inline'; "
-#             "connect-src * ws: wss:;"
-#         )
-#         return response
+class NiceGUICompatibleCSP(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Remove any restrictive CSP headers
+        response.headers.pop("Content-Security-Policy", None)
+        response.headers.pop("Content-Security-Policy-Report-Only", None)
+        
+        # Set CSP that works with NiceGUI's requirements
+        # NiceGUI REQUIRES 'unsafe-inline' and 'unsafe-eval' due to Vue.js
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self' https: http: ws: wss: data: blob:; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; "
+            "style-src 'self' 'unsafe-inline' https: http:; "
+            "img-src 'self' data: blob: https: http:; "
+            "font-src 'self' data: https: http:; "
+            "connect-src 'self' https: http: ws: wss:; "
+            "worker-src 'self' blob:;"
+        )
+        
+        return response
 
-
-# app.add_middleware(DisableCSPMiddleware)
+# Add middleware before UI code
+app.add_middleware(NiceGUICompatibleCSP)
 
 @dataclass
 class InputDefaults:
