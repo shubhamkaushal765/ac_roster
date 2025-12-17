@@ -8,6 +8,7 @@ os.environ['NICEGUI_DISABLE_CSP'] = '1'
 import re
 from nicegui import ui, app
 import pandas as pd
+import numpy as np
 import traceback
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
@@ -505,7 +506,7 @@ class RosterGenerationUI:
         # Graph 2: Officer Schedules
         fig2 = plotter.plot_officer_schedule_with_labels(officer_schedule)
         description2 = "Initial schedule generated"
-        self.schedule_history = [(fig2, timestamp, description2)]
+        self.schedule_history = [(fig2, None, timestamp, description2)]
         self._render_schedule_gallery()
         
         # Debug info
@@ -535,8 +536,8 @@ class RosterGenerationUI:
         ui.label('📊 Counter Timetable History').classes('text-lg font-bold')
         ui.label(f'Showing {len(self.timetable_history)} version(s) - Swipe to see history').classes('text-sm text-gray-500')
         
-        with ui.carousel(animated=True, arrows=True, navigation=True).props('height=1000px').classes('w-full'):
-            for idx, (fig, stats, timestamp, description) in enumerate(reversed(self.timetable_history)):
+        with ui.carousel(animated=True, arrows=True, navigation=True, value=f'timetable_{len(self.timetable_history) - 1}').props('height=1000px').classes('w-full'):
+            for idx, (fig, stats, timestamp, description) in enumerate(self.timetable_history):
                 with ui.carousel_slide(name=f'timetable_{len(self.timetable_history) - idx - 1}'):
                     with ui.column().classes('w-full'):
                         # Version header
@@ -563,12 +564,12 @@ class RosterGenerationUI:
         ui.label('👮 Officer Schedule History').classes('text-lg font-bold')
         ui.label(f'Showing {len(self.schedule_history)} version(s) - Swipe to see history').classes('text-sm text-gray-500')
         
-        with ui.carousel(animated=True, arrows=True, navigation=True).props('height=700px').classes('w-full'):
-            for idx, (fig, timestamp, description) in enumerate(reversed(self.schedule_history)):
-                with ui.carousel_slide(name=f'schedule_{len(self.schedule_history) - idx - 1}'):
+        with ui.carousel(animated=True, arrows=True, navigation=True, value=f'schedule_{len(self.schedule_history) - 1}').props('height=700px').classes('w-full'):
+            for idx, (fig, stats_nil, timestamp, description) in enumerate(self.schedule_history):
+                with ui.carousel_slide(name=f'schedule_{idx}'):
                     with ui.column().classes('w-full'):
                         # Version header
-                        if idx == 0:
+                        if idx == len(self.schedule_history)-1:
                             ui.label(f'📌 Latest - {timestamp}').classes('text-lg font-bold mb-1 text-primary')
                         else:
                             ui.label(f'{timestamp}').classes('text-lg font-bold mb-1 text-gray-600')
@@ -576,8 +577,39 @@ class RosterGenerationUI:
                         # Description
                         ui.markdown(description).classes('text-sm text-gray-700 mb-3 whitespace-pre-line')
                         
-                        # Graph (fixed height, no scroll needed since no stats)
+                        # Graph 2 height, no scroll needed since no stats)
                         ui.plotly(fig).classes('w-full').style('height: 600px;')
+
+    def _render_merged_gallery(self):
+        """Render unified carousel for timetable + schedule"""
+        ui.separator()
+        ui.label('📊 Counter Timetable + Officer Schedule History').classes('text-lg font-bold')
+        ui.label(f'Showing {len(self.timetable_history)} version(s)').classes('text-sm text-gray-500')
+
+        with ui.carousel(
+            animated=True,
+            arrows=True,
+            navigation=True,
+            value=f'slide_{len(self.timetable_history) - 1}',
+        ).props('height=1000px').classes('w-full'):
+
+            # zip the two histories together
+            for idx, (tt_entry, sch_entry) in enumerate(zip(self.timetable_history, self.schedule_history)):
+                fig1, stats1, timestamp1, description1 = tt_entry
+                fig2, stats2, timestamp2, description2 = sch_entry
+
+                with ui.carousel_slide(name=f'slide_{idx}'):
+                    with ui.column().classes('w-full'):
+
+                        # --- Timetable graph + stats ---
+                        ui.plotly(fig1).classes('w-full')
+                        ui.textarea(
+                            label='Counter Manning Statistics',
+                            value=stats1
+                        ).classes('w-full').props('rows=10')
+
+                        # --- Schedule graph ---
+                        ui.plotly(fig2).classes('w-full').style('height: 600px;')
 
     
     def _render_debug_info(self, counter_matrix, final_counter_matrix, 
@@ -714,7 +746,7 @@ class RosterGenerationUI:
             
             # Add to history
             self.timetable_history.append((fig1, stats, timestamp, description))
-            self.schedule_history.append((fig2, timestamp, description))
+            self.schedule_history.append((fig2, None, timestamp, description))
             
             # Re-render galleries
             self.result_container.clear()
@@ -801,7 +833,7 @@ class RosterGenerationUI:
                 description = f"Deleted officer {officer} from {start_time} to {end_time}"
             
                 # Re-render visualizations
-                self._update_visualizations()
+                self._update_visualizations(description)
             else:
                 ui.notify("⚠️ Officer not found in schedule", type='warning')
                 
@@ -816,13 +848,21 @@ class RosterGenerationUI:
             config = MODE_CONFIG[OperationMode(self.current_values['operation_mode'])]
             
             # Convert edited schedule back to matrix
-            edited_matrix = schedule_to_matrix(
-                self.edited_schedule)
-            
+            edited_counter_matrix = np.zeros((config['num_counters'], NUM_SLOTS), dtype=object)
+
+            # Fill the counter matrix from officer schedules
+            for officer_id, schedule in self.edited_schedule.items():
+                for slot_idx, counter_no in enumerate(schedule):
+                    if counter_no != 0:
+                        counter_idx = counter_no - 1  # Counter numbers are 1-indexed
+                        if 0 <= counter_idx < config['num_counters']:
+                            edited_counter_matrix[counter_idx, slot_idx] = officer_id
+
+
             # ADD THIS DEBUG CODE HERE:
             print("=" * 80)
             print("DEBUG INFO IN UPDATE_VISUALIZATIONS:")
-            print(f"edited_matrix shape: {edited_matrix.shape}")
+            print(f"edited_counter_matrix shape: {edited_counter_matrix.shape}")
             print(f"Number of officers: {len(self.edited_schedule)}")
             print(f"NUM_SLOTS: {NUM_SLOTS}")
             print(f"config['num_counters']: {config['num_counters']}")
@@ -837,7 +877,7 @@ class RosterGenerationUI:
             
             # Generate BOTH figures
             print("DEBUG: Step 4 - Calling plot_officer_timetable_with_labels")
-            fig1 = plotter.plot_officer_timetable_with_labels(edited_matrix)
+            fig1 = plotter.plot_officer_timetable_with_labels(edited_counter_matrix)
             print("DEBUG: Step 4 - COMPLETED")
             
             print("DEBUG: Step 5 - Calling plot_officer_schedule_with_labels")
@@ -847,7 +887,7 @@ class RosterGenerationUI:
             # Calculate stats for Graph 1
             print("DEBUG: Step 6 - Generating statistics")
             stats_generator = StatisticsGenerator(OperationMode(self.current_values['operation_mode']))
-            stats = stats_generator.generate_statistics(edited_matrix)
+            stats = stats_generator.generate_statistics(edited_counter_matrix)
             print("DEBUG: Step 6 - COMPLETED")
 
             # Get timestamp
@@ -857,7 +897,7 @@ class RosterGenerationUI:
             # Add BOTH to history
             print("DEBUG: Step 8 - Adding to history")
             self.timetable_history.append((fig1, stats, timestamp, description))
-            self.schedule_history.append((fig2, timestamp, description))
+            self.schedule_history.append((fig2, None, timestamp, description))
 
             # Re-render BOTH galleries
             print("DEBUG: Step 9 - Clearing result container")
