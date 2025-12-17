@@ -10,4 +10,5 @@ COPY --chown=app:app acroster ./acroster
 RUN pip install --no-cache-dir .
 COPY --chown=app:app . ./
 USER app
+#CMD ["bash", "-c", "streamlit run app.py --server.port=$PORT"]
 CMD ["python", "nice_app.py"]
