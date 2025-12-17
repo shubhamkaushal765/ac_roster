@@ -148,3 +148,15 @@ class StepperNavigation:
                     ui.button(next_label, on_click=stepper.next)
             if show_back:
                 ui.button('Back', on_click=stepper.previous).props('flat')
+
+
+def copyable_label(text_to_copy: str):
+    with ui.row().classes('items-center gap-2'):
+        ui.markdown(text_to_copy).classes('font-mono')
+        ui.button(
+            icon='content_copy',
+            on_click=lambda: (
+                ui.clipboard.write(text_to_copy),
+                ui.notify('Copied to clipboard', type='positive')
+            )
+        ).props('flat dense')

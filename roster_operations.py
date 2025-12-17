@@ -61,7 +61,7 @@ class RosterOperations:
         })
         
         # Initialize history
-        timestamp = datetime.now().strftime("%H%M")
+        timestamp = datetime.now().strftime("%H:%M:%S")
         self._add_to_history(
             counter_matrix, 
             officer_schedule, 
@@ -103,7 +103,7 @@ class RosterOperations:
             description += f"• {sos.officer_key} at counter {sos.pre_assigned_counter}\n"
         
         # Add to history
-        timestamp = datetime.now().strftime("%H%M")
+        timestamp = datetime.now().strftime("%H:%M:%S")
         self._add_to_history(
             final_counter_matrix, 
             officer_schedule, 
@@ -189,7 +189,7 @@ class RosterOperations:
         stats = stats_generator.generate_statistics(edited_counter_matrix)
         
         # Add to history
-        timestamp = datetime.now().strftime("%H%M")
+        timestamp = datetime.now().strftime("%H:%M:%S")
         self._add_to_history(
             edited_counter_matrix,
             self.edited_schedule,

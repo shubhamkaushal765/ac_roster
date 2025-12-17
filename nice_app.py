@@ -16,7 +16,7 @@ from form_models import FormInputs, InputDefaults
 from form_stepper import FormStepperUI
 from roster_editor_ui import RosterEditorUI
 from roster_operations import RosterOperations
-from ui_components import MetricsCard, MergedHistoryCarousel
+from ui_components import MetricsCard, MergedHistoryCarousel, copyable_label
 
 
 class NiceGUICompatibleCSP(BaseHTTPMiddleware):
@@ -79,7 +79,7 @@ class RosterGenerationUI:
         ui.label("Generate AC/DC roster (Morning)").classes("text-2xl font-bold")
         ui.label("💡 For better display on mobile, please enable Desktop site in your browser settings.")\
             .style("font-size:14px; color:gray; margin-top:-10px;")
-    
+
     def _render_main_form(self):
         """Render the main form with summary and stepper"""
         # Summary card with toggle button
@@ -255,7 +255,7 @@ class RosterGenerationUI:
                 self.operations.add_sos_officers(sos_timings)
             
             self.spinner.visible = False
-            ui.notify('✅ Schedule updated with SOS officers!', type='positive')
+            ui.notify('✅ Visuals updated!', type='positive')
             
             # Re-render results
             self.result_container.clear()

@@ -182,3 +182,32 @@ def extract_officer_timings(full_text):
             })
 
     return final_records
+
+def parse_sos_timing_with_metadata(timing_str: str) -> tuple:
+    """
+    Parse SOS timing string with optional deployment and name metadata.
+    
+    Format: (DEPLOYMENT|NAME)timing or just timing
+    
+    Examples:
+        "(GC|John Doe)1000-1200" -> ("GC", "John Doe", "1000-1200")
+        "(|Jane Smith)1000-1200" -> (None, "Jane Smith", "1000-1200")
+        "(GC|)1000-1200" -> ("GC", None, "1000-1200")
+        "1000-1200" -> (None, None, "1000-1200")
+    
+    Returns:
+        tuple: (deployment, name, timing)
+    """
+    import re
+    
+    # Check if starts with parentheses
+    match = re.match(r'^\(([^|]*)\|([^)]*)\)(.+)$', timing_str.strip())
+    
+    if match:
+        deployment = match.group(1).strip() or None
+        name = match.group(2).strip() or None
+        timing = match.group(3).strip()
+        return (deployment, name, timing)
+    else:
+        # No metadata, just timing
+        return (None, None, timing_str.strip())

@@ -32,7 +32,6 @@ class FormStepperUI:
             self._render_step_ot_counters(stepper)
             self._render_step_ro_ra(stepper)
             self._render_step_optional(stepper)
-            self._render_step_generate(stepper)
     
     def _render_step_main_officers(self, stepper):
         """Step 1: Main Officers"""
@@ -130,20 +129,5 @@ class FormStepperUI:
                 self.inputs.show_debug = ui.checkbox('Show Debug Information', value=True)
             
             with ui.stepper_navigation():
-                ui.button('Done', on_click=lambda: (self.on_update_summary(), stepper.next()))
-                ui.button('Back', on_click=stepper.previous).props('flat')
-    
-    def _render_step_generate(self, stepper):
-        """Step 7: Generate Schedule"""
-        with ui.step("Generate Schedule"):
-            ui.label('Click the button below to generate the schedule')
-            
-            with ui.row().classes('w-full justify-center'):
-                ui.button(
-                    '🚀 Generate Schedule',
-                    on_click=self.on_generate,
-                    color='primary'
-                ).classes('w-1/2')
-            
-            with ui.stepper_navigation():
+                ui.button('🚀 Generate Schedule', on_click=lambda: (self.on_update_summary(), self.on_generate()))
                 ui.button('Back', on_click=stepper.previous).props('flat')
