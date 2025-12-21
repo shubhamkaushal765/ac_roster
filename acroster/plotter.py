@@ -199,8 +199,7 @@ class Plotter:
             yaxis_autorange="reversed",
             dragmode=False,
             autosize=True,
-            height=900,
-            width=900
+            height=900
         )
 
         # Show ticks with time labels
@@ -378,8 +377,7 @@ class Plotter:
             yaxis_autorange="reversed",
             dragmode=False,
             autosize=True,
-            height=900,
-            width=900
+            height=900
         )
 
         # Show ticks with time labels
