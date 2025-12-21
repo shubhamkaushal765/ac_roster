@@ -50,7 +50,7 @@ class FormInputs:
     def get_summary_html(self) -> str:
         """Generate HTML summary of current inputs"""
         if not self.main_officers:
-            return '<div><p><em>Fill in the form to see your inputs here</em></p></div>'
+            return '<div><p><em>🚀 Let’s get started! Fill in the form below 👇  </em></p></div>'
         
         return f'''
             <div>

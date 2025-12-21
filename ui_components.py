@@ -14,7 +14,7 @@ class MetricsCard:
     def render(title: str, value: int):
         """Render a single metrics card"""
         with ui.column().style("flex: 1"):
-            with ui.card().classes('w-full text-center p-4'):
+            with ui.card().classes('w-full p-4').style('text-align: center;'):
                 ui.label(title).classes('text-sm text-gray-500')
                 ui.label(str(value)).classes('text-3xl font-bold')
 
@@ -70,9 +70,9 @@ class HistoryCarousel:
                         # Stats (optional)
                         if show_stats and stats:
                             ui.textarea(
-                                label='Counter Manning Statistics',
+                                label='',
                                 value=stats,
-                            ).classes('w-full').props('rows=10')
+                            ).classes('w-full border border-border rounded-md p-2').props('rows=10')
 
 
 class MergedHistoryCarousel:

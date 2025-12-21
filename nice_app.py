@@ -17,6 +17,7 @@ from form_stepper import FormStepperUI
 from roster_editor_ui import RosterEditorUI
 from roster_operations import RosterOperations
 from ui_components import MetricsCard, MergedHistoryCarousel, copyable_label
+from ui_theme import apply_theme
 
 
 class NiceGUICompatibleCSP(BaseHTTPMiddleware):
@@ -61,31 +62,53 @@ class RosterGenerationUI:
         
     def render(self):
         """Render the complete UI"""
-        self._render_header()
-
-        with ui.row().style("width: 100%"):
-            # Main content area
-            with ui.column().style("flex: 3"):
+        # Define sidebar width (in px)
+        sidebar_width = 500  # Change this value to adjust sidebar width
+        
+        with ui.row().classes('w-full'):
+            # Main content area (left side)
+            with ui.column().style(f'width: calc(100% - {sidebar_width}px); padding: 1rem;'):
+                # Header with metrics (inside main content area)
+                with ui.row().classes('w-full items-center justify-between gap-4 mb-4'):
+                    # Left side: Title and mobile tip
+                    with ui.column().style('flex: 0.4'):
+                        ui.label("Generate AC/DC roster (Morning)").classes("text-2xl font-bold")
+                        ui.label("💡 For better display on mobile, please enable Desktop site in your browser settings.")\
+                            .style("font-size:14px; color:gray; margin-top:-10px;")
+                    
+                    # Right side: Metrics (only show after generation)
+                    self.metrics_container = ui.row().classes('gap-4').style('flex: 0.6')
+                
+                # Form and results
                 self._render_main_form()
-                self.result_container = ui.column()
-            
-            # Sidebar
-            with ui.column().style("flex: 2"):
-                self.sidebar_container = ui.column().style("width: 100%")
+                self.result_container = ui.column().classes('w-full')
+
+            # Sidebar (fixed on right)
+            with ui.column().style(
+                f'width: {sidebar_width}px; height: 100vh; position: fixed; right: 0; top: 0; background: var(--q-background); padding: 1rem; overflow-y: auto;'
+            ):
+                self.sidebar_container = ui.column().classes('w-full')
                 self._render_sidebar()
     
     def _render_header(self):
         """Render page header"""
-        ui.label("Generate AC/DC roster (Morning)").classes("text-2xl font-bold")
-        ui.label("💡 For better display on mobile, please enable Desktop site in your browser settings.")\
-            .style("font-size:14px; color:gray; margin-top:-10px;")
+        with ui.row().classes('w-full items-center justify-between gap-4'):
+            # Left side: Title and mobile tip
+            with ui.column():
+                ui.label("Generate AC/DC roster (Morning)").classes("text-2xl font-bold")
+                ui.label("💡 For better display on mobile, please enable Desktop site in your browser settings.")\
+                    .style("font-size:14px; color:gray; margin-top:-10px;")
+            
+            # Right side: Metrics (only show after generation)
+            self.metrics_container = ui.row().classes('gap-4')
+
 
     def _render_main_form(self):
         """Render the main form with summary and stepper"""
         # Summary card with toggle button
         with ui.card().classes('w-full mb-4'):
             with ui.row().classes('w-full items-center justify-between'):
-                ui.label('Your Inputs:').classes('text-bold')
+                ui.label('Your inputs:').classes('text-bold')
                 self.inputs.toggle_form_btn = ui.button(
                     icon='expand_less',
                     on_click=self._toggle_form_visibility
@@ -187,12 +210,12 @@ class RosterGenerationUI:
         # Officer counts
         counts = self.operations.get_officer_counts()
         
-        with ui.row().classes('w-full gap-4'):
+        self.metrics_container.clear()
+        with self.metrics_container:
             MetricsCard.render('👮 Main Officers', counts['main'])
             MetricsCard.render('🆘 SOS Officers', counts['sos'])
             MetricsCard.render('⏰ OT Officers', counts['ot'])
             MetricsCard.render('📊 Total Officers', counts['total'])
-        
         # Optimization penalty
         if self.operations.current_orchestrator.penalty is not None:
             ui.notify(
@@ -320,7 +343,7 @@ def main():
     """Main entry point"""
     # Add CSP middleware
     #app.add_middleware(NiceGUICompatibleCSP)
-    
+    apply_theme()
     # Set window title
     ui.window_title = "Generate ACar/DCar Roster Morning"
     
