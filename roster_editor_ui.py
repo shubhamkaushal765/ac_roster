@@ -84,8 +84,9 @@ class RosterEditorUI:
             with ui.tab_panels(add_subtabs, value=raw_tab, animated=False).classes('w-full'):
                 # Raw Input Panel
                 with ui.tab_panel(raw_tab):
-                    ui.markdown("**Example**")
-                    example_raw_text = '''ACAR SOS AM  
+                    self.raw_example_expansion = ui.expansion('📝 Example', value=True).classes('w-full')
+                    with self.raw_example_expansion:
+                        example_raw_text = '''ACAR SOS AM  
 02 x GC  
 - officer A (1000-1200)  
 - officer B (2000-2200)  
@@ -94,15 +95,15 @@ class RosterEditorUI:
 - officer C  
 - officer D  
 - officer E (1000-1130)'''
-                    copyable_label(example_raw_text)
+                        copyable_label(example_raw_text)
                     raw_sos_input = ui.textarea(
                         label='Paste here',
                         placeholder='ACAR SOS AM\n02 x GC\n...',
                         value='',
-                    ).classes('w-full').props('rows=8')
+                    ).classes('w-full border border-border rounded-md p-2').props('rows=8')
                     with ui.row().classes('gap-2'):
                         ui.button(
-                            '🔍 Extract SOS Officers',
+                            '🔍 Extract',
                             on_click=lambda: self.extract_raw_sos(raw_sos_input.value)
                         ).props('color=primary')
 
@@ -162,7 +163,9 @@ Optional pre-assigned counters must be enclosed in parentheses `()` before the t
 
                 self.sos_extracted_data = extracted_data
                 self.sos_confirmed = False
-
+                if hasattr(self, 'raw_example_expansion'):
+                    self.raw_example_expansion.value = False
+                
                 # Notify success
                 ui.notify(f'✅ Extracted {len(extracted_data)} officer records', type='positive')
 
@@ -202,7 +205,7 @@ Optional pre-assigned counters must be enclosed in parentheses `()` before the t
             self.sos_table.add_slot('body', r'''
                 <q-tr :props="props">
                     <q-td key="selected" :props="props" class="text-center">
-                        <q-checkbox v-model="props.row.selected" dense @update:model-value="$parent.$emit('update:selected', props.row)"/>
+                        <q-checkbox v-model="props.row.selected" @update:model-value="$parent.$emit('update:selected', props.row)"/>
                     </q-td>
                     <q-td key="deployment" :props="props">
                         {{ props.row.deployment }}
@@ -239,7 +242,7 @@ Optional pre-assigned counters must be enclosed in parentheses `()` before the t
 
             # Confirm button
             self.confirm_btn = ui.button(
-                '✅ Confirm & Add to Roster',
+                '✅ Confirm',
                 on_click=self._confirm_add_sos
             ).classes('w-full mt-2').props('color=primary')
 
@@ -315,7 +318,7 @@ Optional pre-assigned counters must be enclosed in parentheses `()` before the t
         if self.reset_btn:
             self.reset_btn.disable()
         
-        ui.notify('Reset completed', type='info')
+        #ui.notify('Reset completed', type='info')
 
 
     def _render_swap_panel(self, tab, officer_ids, time_slots):
