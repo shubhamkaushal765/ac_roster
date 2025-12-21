@@ -51,7 +51,7 @@ class FormStepperUI:
             self.inputs.main_officers = ui.input(
                 '', 
                 value=self.defaults.main_officers
-            ).style("width: 100%")
+            ).style("width: 100%").classes('w-full border border-border rounded-md p-2')
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self.on_update_summary(), stepper.next()))
@@ -69,7 +69,7 @@ class FormStepperUI:
             self.inputs.gl_counters = ui.input(
                 '', 
                 value=self.inputs.saved_inputs.get('gl_counters', self.defaults.gl_counters)
-            ).style("width: 100%")
+            ).style("width: 100%").classes('w-full border border-border rounded-md p-2')
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self.on_update_summary(), stepper.next()))
@@ -78,12 +78,12 @@ class FormStepperUI:
     def _render_step_handwritten(self, stepper):
         """Step 3: Handwritten Counters"""
         with ui.step("Handwritten Counters (1000-1030 only)"):
-            ui.label("Did Chop RM manually change some of the first counters? Key in as <S/N>AC<counter no.>")
+            ui.label("Did Chops room manually change some of the first counters? Key in as <S/N>AC<counter no.>")
             ui.label("E.g. 3AC12, 5AC13")
             self.inputs.handwritten_counters = ui.input(
                 "", 
                 value=self.inputs.saved_inputs.get('handwritten_counters', self.defaults.handwritten_counters)
-            ).style("width: 100%")
+            ).style("width: 100%").classes('w-full border border-border rounded-md p-2')
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self.on_update_summary(), stepper.next()))
@@ -97,7 +97,7 @@ class FormStepperUI:
             self.inputs.ot_counters = ui.input(
                 "", 
                 value=self.inputs.saved_inputs.get('ot_counters', self.defaults.ot_counters)
-            ).style("width: 100%")
+            ).style("width: 100%").classes('w-full border border-border rounded-md p-2')
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self.on_update_summary(), stepper.next()))
@@ -111,7 +111,7 @@ class FormStepperUI:
             self.inputs.ro_ra_officers = ui.input(
                 "", 
                 value=self.inputs.saved_inputs.get('ro_ra_officers', self.defaults.ro_ra_officers)
-            ).style("width: 100%")
+            ).style("width: 100%").classes('w-full border border-border rounded-md p-2')
             
             with ui.stepper_navigation():
                 ui.button('Next', on_click=lambda: (self.on_update_summary(), stepper.next()))
@@ -125,7 +125,7 @@ class FormStepperUI:
                 self.inputs.beam_width = ui.slider(
                     min=10, max=100, 
                     value=self.inputs.saved_inputs.get('beam_width', self.defaults.beam_width)
-                )
+                ).classes('w-full border border-border rounded-md p-2')
                 self.inputs.show_debug = ui.checkbox('Show Debug Information', value=True)
             
             with ui.stepper_navigation():
