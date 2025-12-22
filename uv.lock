@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -35,6 +35,7 @@ dependencies = [
     { name = "cycler" },
     { name = "defusedxml" },
     { name = "docopt" },
+    { name = "fastapi" },
     { name = "fastjsonschema" },
     { name = "fonttools" },
     { name = "gitdb" },
@@ -64,6 +65,8 @@ dependencies = [
     { name = "pre-commit" },
     { name = "protobuf" },
     { name = "pyarrow" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pydeck" },
     { name = "pyparsing" },
     { name = "pytz" },
@@ -80,6 +83,7 @@ dependencies = [
     { name = "toml" },
     { name = "tzdata" },
     { name = "urllib3" },
+    { name = "uvicorn", extra = ["standard"] },
     { name = "watchdog" },
     { name = "webencodings" },
     { name = "wheel" },
@@ -103,6 +107,7 @@ requires-dist = [
     { name = "cycler", specifier = "==0.12.1" },
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "docopt", specifier = "==0.6.2" },
+    { name = "fastapi", specifier = ">=0.124.4" },
     { name = "fastjsonschema", specifier = "==2.21.2" },
     { name = "fonttools", specifier = "==4.60.1" },
     { name = "gitdb", specifier = "==4.0.12" },
@@ -132,6 +137,8 @@ requires-dist = [
     { name = "pre-commit", specifier = ">=4.3.0" },
     { name = "protobuf", specifier = ">=6.31.1" },
     { name = "pyarrow", specifier = ">=21.0.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pydantic-settings", specifier = ">=2.12.0" },
     { name = "pydeck", specifier = "==0.9.1" },
     { name = "pyparsing", specifier = "==3.2.5" },
     { name = "pytz", specifier = "==2025.2" },
@@ -148,6 +155,7 @@ requires-dist = [
     { name = "toml", specifier = "==0.10.2" },
     { name = "tzdata", specifier = "==2025.2" },
     { name = "urllib3", specifier = "==2.5.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = "==0.27.0" },
     { name = "watchdog", specifier = "==6.0.0" },
     { name = "webencodings", specifier = "==0.5.1" },
     { name = "wheel", specifier = "==0.45.1" },
@@ -2447,6 +2455,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-settings"
+version = "2.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/43/4b/ac7e0aae12027748076d72a8764ff1c9d82ca75a7a52622e67ed3f765c54/pydantic_settings-2.12.0.tar.gz", hash = "sha256:005538ef951e3c2a68e1c08b292b5f2e71490def8589d4221b95dab00dafcfd0", size = 194184, upload-time = "2025-11-10T14:25:47.013Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/60/5d4751ba3f4a40a6891f24eec885f51afd78d208498268c734e256fb13c4/pydantic_settings-2.12.0-py3-none-any.whl", hash = "sha256:fddb9fd99a5b18da837b29710391e945b1e30c135477f484084ee513adb93809", size = 51880, upload-time = "2025-11-10T14:25:45.546Z" },
+]
+
+[[package]]
 name = "pydeck"
 version = "0.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3036,15 +3058,15 @@ wheels = [
 
 [[package]]
 name = "uvicorn"
-version = "0.38.0"
+version = "0.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/ce/f06b84e2697fef4688ca63bdb2fdf113ca0a3be33f94488f2cadb690b0cf/uvicorn-0.38.0.tar.gz", hash = "sha256:fd97093bdd120a2609fc0d3afe931d4d4ad688b6e75f0f929fde1bc36fe0e91d", size = 80605, upload-time = "2025-10-18T13:46:44.63Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/52/75/9cf554ed256d8bcdf3a9bb831b599c4e48e4e5993931fb512f75e529ece4/uvicorn-0.27.0.tar.gz", hash = "sha256:c855578045d45625fd027367f7653d249f7c49f9361ba15cf9624186b26b8eb6", size = 40963, upload-time = "2024-01-22T20:32:35.679Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/d9/d88e73ca598f4f6ff671fb5fde8a32925c2e08a637303a1d12883c7305fa/uvicorn-0.38.0-py3-none-any.whl", hash = "sha256:48c0afd214ceb59340075b4a052ea1ee91c16fbc2a9b1469cca0e54566977b02", size = 68109, upload-time = "2025-10-18T13:46:42.958Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/00/2555ae5c4c8550ffccf8eea97476750bd1cfc0880b4b3ab7237dff4b01d7/uvicorn-0.27.0-py3-none-any.whl", hash = "sha256:890b00f6c537d58695d3bb1f28e23db9d9e7a17cbcc76d7457c499935f933e24", size = 60648, upload-time = "2024-01-22T20:32:31.148Z" },
 ]
 
 [package.optional-dependencies]
