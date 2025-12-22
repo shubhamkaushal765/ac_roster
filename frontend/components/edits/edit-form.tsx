@@ -58,7 +58,7 @@ export function EditForm() {
             setSuccess(response.message)
             reset()
             router.refresh() // Refresh server components
-        } catch (err: never) {
+        } catch (err: any) {
             setError(err.message || "Failed to create edit")
         } finally {
             setIsLoading(false)

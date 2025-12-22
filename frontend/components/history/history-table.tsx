@@ -1,4 +1,4 @@
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
     Table,
     TableBody,
@@ -7,15 +7,15 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import {Badge} from "@/components/ui/badge"
-import {RosterHistoryItem} from "@/lib/types"
-import {formatTimestamp} from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { RosterHistoryItem } from "@/lib/types"
+import { formatTimestamp } from "@/lib/utils"
 
 interface HistoryTableProps {
     items: RosterHistoryItem[]
 }
 
-export function HistoryTable({items}: HistoryTableProps) {
+export function HistoryTable({ items }: HistoryTableProps) {
     if (items.length === 0) {
         return (
             <Card>
@@ -52,19 +52,19 @@ export function HistoryTable({items}: HistoryTableProps) {
                                     </TableCell>
                                     <TableCell>
                                         <div className="text-sm">
-                                            <div>Main: {item.main_officer_count || "N/A"}</div>
+                                            <div>Main: {item.main_officer_count ?? "N/A"}</div>
                                             <div className="text-gray-500">
-                                                SOS: {item.sos_officer_count || 0} | OT:{" "}
-                                                {item.ot_officer_count || 0}
+                                                SOS: {item.sos_officer_count ?? 0} | OT:{" "}
+                                                {item.ot_officer_count ?? 0}
                                             </div>
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Badge>{item.total_officer_count || "N/A"}</Badge>
+                                        <Badge>{item.total_officer_count ?? "N/A"}</Badge>
                                     </TableCell>
                                     <TableCell>{item.beam_width}</TableCell>
                                     <TableCell>
-                                        {item.optimization_penalty !== null
+                                        {typeof item.optimization_penalty === "number"
                                             ? item.optimization_penalty.toFixed(2)
                                             : "N/A"}
                                     </TableCell>
