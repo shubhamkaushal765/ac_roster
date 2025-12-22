@@ -1,5 +1,16 @@
 ## Architecture Summary
 
+### Running the application
+
+```bash
+# Start Next.js dev server
+npm run dev
+
+# Build for production
+npm run build
+npm start
+```
+
 ### SSR Strategy
 
 - **Dashboard (/):** Fetches recent history server-side

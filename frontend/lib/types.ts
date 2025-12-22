@@ -48,7 +48,7 @@ export interface RosterGenerationResponse {
     success: boolean
     data: RosterData
     officer_counts: OfficerCounts
-    optimization_penalty?: number
+    optimization_penalty: number | null
     statistics: StatisticsData
 }
 

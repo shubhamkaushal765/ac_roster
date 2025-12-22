@@ -1,17 +1,17 @@
 "use client"
 
-import {useState} from "react"
-import {useRouter} from "next/navigation"
-import {useForm} from "react-hook-form"
-import {zodResolver} from "@hookform/resolvers/zod"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import {
     rosterGenerationSchema,
     type RosterGenerationFormData,
 } from "@/lib/validations"
-import {generateRoster} from "@/lib/api"
-import {Button} from "@/components/ui/button"
-import {Input} from "@/components/ui/input"
-import {Label} from "@/components/ui/label"
+import { generateRoster } from "@/lib/api"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
     Select,
     SelectContent,
@@ -19,10 +19,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import {Switch} from "@/components/ui/switch"
-import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card"
-import {Alert, AlertDescription} from "@/components/ui/alert"
-import {Loader2} from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2 } from "lucide-react"
 
 interface GenerationFormProps {
     lastInputs?: {
@@ -36,7 +36,7 @@ interface GenerationFormProps {
     }
 }
 
-export function GenerationForm({lastInputs}: GenerationFormProps) {
+export function GenerationForm({ lastInputs }: GenerationFormProps) {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -44,7 +44,7 @@ export function GenerationForm({lastInputs}: GenerationFormProps) {
     const {
         register,
         handleSubmit,
-        formState: {errors},
+        formState: { errors },
         setValue,
         watch,
     } = useForm<RosterGenerationFormData>({
@@ -100,7 +100,7 @@ export function GenerationForm({lastInputs}: GenerationFormProps) {
                             }
                         >
                             <SelectTrigger>
-                                <SelectValue/>
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="arrival">Arrival</SelectItem>
@@ -190,7 +190,7 @@ export function GenerationForm({lastInputs}: GenerationFormProps) {
                             type="number"
                             min={1}
                             max={100}
-                            {...register("beam_width", {valueAsNumber: true})}
+                            {...register("beam_width")}
                         />
                         {errors.beam_width && (
                             <p className="text-sm text-red-500">
@@ -223,7 +223,7 @@ export function GenerationForm({lastInputs}: GenerationFormProps) {
 
                     {/* Submit Button */}
                     <Button type="submit" className="w-full" disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isLoading ? "Generating..." : "Generate Roster"}
                     </Button>
                 </form>
